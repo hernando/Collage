@@ -27,6 +27,10 @@
 #include <lunchbox/os.h>
 #include <lunchbox/pluginRegistry.h>
 
+#ifdef COLLAGE_USE_MPI
+#	include <mpi.h>
+#endif
+
 namespace co
 {
 namespace
@@ -48,6 +52,10 @@ bool _init( const int argc, char** argv )
 {
     if( ++_initialized > 1 ) // not first
         return true;
+
+#ifdef COLLAGE_USE_MPI
+	MPI_Init(argc, argv);
+#endif
 
     if( !lunchbox::init( argc, argv ))
         return false;

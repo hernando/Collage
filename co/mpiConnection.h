@@ -44,14 +44,12 @@ class MPIConnection : public Connection
 
 		virtual Notifier getNotifier() const { return _notifier; }
 
+		virtual void readNB( void* buffer, const uint64_t bytes );
+		virtual int64_t readSync( void* buffer, const uint64_t bytes, const bool block );
+		virtual int64_t write( const void* buffer, const uint64_t bytes );
+
 	private:
 		Notifier _notifier;
-
-	protected:
-    virtual void readNB( void* buffer, const uint64_t bytes );
-    virtual int64_t readSync( void* buffer, const uint64_t bytes, const bool block );
-    virtual int64_t write( const void* buffer, const uint64_t bytes );
-		
 };
 
 }
