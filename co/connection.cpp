@@ -27,7 +27,6 @@
 #include "pipeConnection.h"
 #include "socketConnection.h"
 #include "rspConnection.h"
-#include "mpiConnection.h"
 
 #ifdef _WIN32
 #  include "namedPipeConnection.h"
@@ -40,6 +39,9 @@
 #endif
 #ifdef COLLAGE_USE_UDT
 #  include "udtConnection.h"
+#endif
+#ifdef COLLAGE_USE_MPI
+#	include "mpiConnection.h"
 #endif
 
 #include <lunchbox/scopedMutex.h>
@@ -174,9 +176,11 @@ ConnectionPtr Connection::create( ConnectionDescriptionPtr description )
             connection = new UDTConnection;
             break;
 #endif
+#ifdef COLLAGE_USE_MPI
         case CONNECTIONTYPE_MPI:
             connection = new MPIConnection;
             break;
+#endif
 
         default:
             LBWARN << "Connection type " << description->type
