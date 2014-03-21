@@ -46,6 +46,8 @@ static ConnectionType _getConnectionType( const std::string& string )
         return CONNECTIONTYPE_RDMA;
     if( string == "UDT" )
         return CONNECTIONTYPE_UDT;
+    if( string == "MPI" )
+        return CONNECTIONTYPE_MPI;
 
     LBWARN << "Unknown connection type: " << string << std::endl;
     return CONNECTIONTYPE_NONE;

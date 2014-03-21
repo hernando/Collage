@@ -167,5 +167,10 @@ if(UDT_FOUND)
   list(APPEND CO_SOURCES udtConnection.cpp)
 endif()
 
+if(MPI_FOUND)
+  list(APPEND CO_HEADERS mpiConnection.h)
+  list(APPEND CO_SOURCES mpiConnection.cpp)
+endif()
+
 list(SORT CO_HEADERS)
 list(SORT CO_SOURCES)
