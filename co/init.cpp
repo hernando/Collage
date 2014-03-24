@@ -54,7 +54,7 @@ bool _init( const int argc, char** argv )
         return true;
 
 #ifdef COLLAGE_USE_MPI
-	MPI_Init(argc, argv);
+	MPI_Init(&argc, &argv);
 #endif
 
     if( !lunchbox::init( argc, argv ))
@@ -98,6 +98,10 @@ bool exit()
     // de-initialize registered plugins
     lunchbox::PluginRegistry& plugins = Global::getPluginRegistry();
     plugins.exit();
+
+#ifdef COLLAGE_USE_MPI
+	MPI_Finalize();
+#endif
 
     return lunchbox::exit();
 }

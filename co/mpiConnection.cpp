@@ -29,6 +29,7 @@ MPIConnection::MPIConnection() : _notifier(-1)
 {
 	ConnectionDescriptionPtr description = _getDescription();
 	description->type = CONNECTIONTYPE_MPI;
+    description->bandwidth = 1024000; // For example :S
 }
 
 MPIConnection::~MPIConnection()
@@ -37,24 +38,67 @@ MPIConnection::~MPIConnection()
 
 bool MPIConnection::connect()
 {
-	return false;
+    LBASSERT( getDescription()->type == CONNECTIONTYPE_MPI );
+
+    if( !isClosed() )
+        return false;
+
+    _setState( STATE_CONNECTING );
+
+	int rank = -1;
+	if (MPI_SUCCESS != MPI_Rank(MPI_COMM_WORLD, &rank))
+	{
+        LBERROR << "Could not determine the rank of the calling process in the communicator: MPI_COMM_WORLD" << std::endl;
+	}
+
+    LBASSERT( rank >= 0 );
+
+    ConnectionDescriptionPtr description = getDescription();
+	description->port
+
+	if (MPI_SUCCESS != MPI_Send(&rank, 1, MPI_INT, description->port, 0, MPI_COMM_WORLD))
+	{
+        LBERROR << "Could not connect to "<< description->port << " process."<< std::endl;
+	}
+
+    _setState( STATE_CONNECTED );
+
+    LBINFO << "Connected " << description->toString() << std::endl;
+
+	return true;
 }
 
 bool MPIConnection::listen()
 {
-	return false;
+    if( !isClosed( ))
+        return false;
+
+    _setState( STATE_LISTENING );
+
+	return true;
 }
 
 void MPIConnection::close()
 {
+    if( isClosed( ))
+        return;
+
+    _setState( STATE_CLOSED );
 }
 
 void MPIConnection::acceptNB()
 {
+	/* NOP */
 }
 
 ConnectionPtr MPIConnection::acceptSync()
 {
+    if( !isListening( ))
+        return 0;
+
+    ConstConnectionDescriptionPtr description = getDescription();
+    MPIConnection* newConnection = new MPIConnection( description->type );
+    ConnectionPtr connection( newConnection ); // to keep ref-counting correct
 	return 0;
 }
 
