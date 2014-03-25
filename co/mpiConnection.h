@@ -22,8 +22,15 @@
 
 #include <co/connection.h>
 
+#include <lunchbox/thread.h>
+
+#include <mpi.h>
+
+#include <map>
+
 namespace co
 {
+namespace detail { class MPIConnection; } 
 
 /** MPI connection  */
 class MPIConnection : public Connection
@@ -44,12 +51,15 @@ class MPIConnection : public Connection
 
 		virtual Notifier getNotifier() const { return _notifier; }
 
-		virtual void readNB( void* buffer, const uint64_t bytes );
-		virtual int64_t readSync( void* buffer, const uint64_t bytes, const bool block );
-		virtual int64_t write( const void* buffer, const uint64_t bytes );
+    protected:
+		void readNB( void* buffer, const uint64_t bytes );
+		int64_t readSync( void* buffer, const uint64_t bytes, const bool block );
+		int64_t write( const void* buffer, const uint64_t bytes );
 
 	private:
-		Notifier _notifier;
+		Notifier	_notifier;
+		
+		detail::MPIConnection * const _impl;
 };
 
 }
