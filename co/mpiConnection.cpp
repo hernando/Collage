@@ -25,77 +25,7 @@ namespace co
 
 namespace detail
 {
-	class AsyncConnection : lunchbox::Thread
-	{
-		public:
-
-			AsyncConnection(int * peerRank, int rank, char * mpiPort, MPI_Comm * interComm, MPI_Request * request)
-			{
-				_peerRank = peerRank;
-				_rank = rank;
-				_mpiPort = mpiPort;
-				_interComm = interComm;	
-				_status = true;
-				_request = request;
-
-				start();
-			}
-
-			bool wait()
-			{
-				join();
-				return _status;
-			}
-
-			void run()
-			{
-				if (MPI_SUCCESS != MPI_Wait(_request, NULL))
-				{
-					LBERROR << "Error waiting for peer rank in a MPI connection."<< std::endl;
-					_status = false;
-					return;
-				}
-				delete _request;
-
-				if (MPI_SUCCESS != MPI_Open_port(MPI_INFO_NULL, _mpiPort))
-				{
-					LBERROR << "Error openning a port in a MPI connection."<< std::endl;
-					_status = false;
-					return;
-				}
-
-				if (MPI_SUCCESS != MPI_Send(_mpiPort, MPI_MAX_PORT_NAME, MPI_CHAR, *_peerRank, 0, MPI_COMM_WORLD))
-				{
-					LBERROR << "Error sending name port to peer in a MPI connection."<< std::endl;
-					_status = false;
-					return;
-				}
-
-				if ( MPI_SUCCESS != MPI_Comm_accept(_mpiPort, MPI_INFO_NULL, _rank, MPI_COMM_SELF, _interComm))
-				{
-					LBERROR << "Error accepting peer in a MPI connection."<< std::endl;
-					_status = false;
-					return;
-				}
-
-				if (MPI_SUCCESS != MPI_Close_port(_mpiPort))
-				{
-					LBERROR << "Error closing a port in aMPI connection."<< std::endl;
-					_status = false;
-					return;
-				}
-			}
-
-		private:
-			int			_rank;
-			int *		_peerRank;
-			char * 		_mpiPort;
-			MPI_Comm *  _interComm;
-
-			bool		_status;
-
-			MPI_Request * _request;
-	};
+	class AsyncConnection;
 
 	class MPIConnection
 	{
@@ -117,6 +47,74 @@ namespace detail
 			
 			AsyncConnection * _asyncConnection;
 	};
+
+	class AsyncConnection : lunchbox::Thread
+	{
+		public:
+
+			AsyncConnection(MPIConnection * detail, MPI_Request * request) : _status(false)
+			{
+				_detail = detail;
+				_request = request;
+
+				start();
+			}
+
+			bool wait()
+			{
+				join();
+				return _status;
+			}
+
+			void run()
+			{
+				if (MPI_SUCCESS != MPI_Wait(_request, NULL))
+				{
+					LBERROR << "Error waiting for peer rank in a MPI connection."<< std::endl;
+					_status = false;
+					return;
+				}
+				delete _request;
+
+				if (MPI_SUCCESS != MPI_Open_port(MPI_INFO_NULL, _detail->_mpiPort))
+				{
+					LBERROR << "Error openning a port in a MPI connection."<< std::endl;
+					_status = false;
+					return;
+				}
+
+				if (MPI_SUCCESS != MPI_Send(_detail->_mpiPort, MPI_MAX_PORT_NAME, MPI_CHAR, _detail->_peerRank, 0, MPI_COMM_WORLD))
+				{
+					LBERROR << "Error sending name port to peer in a MPI connection."<< std::endl;
+					_status = false;
+					return;
+				}
+
+				if ( MPI_SUCCESS != MPI_Comm_accept(_detail->_mpiPort, MPI_INFO_NULL, _detail->_rank, MPI_COMM_SELF, &_detail->_interComm))
+				{
+					LBERROR << "Error accepting peer in a MPI connection."<< std::endl;
+					_status = false;
+					return;
+				}
+
+				if (MPI_SUCCESS != MPI_Close_port(_detail->_mpiPort))
+				{
+					LBERROR << "Error closing a port in aMPI connection."<< std::endl;
+					_status = false;
+					return;
+				}
+
+				_status = true;
+			}
+
+		private:
+			MPIConnection * _detail;
+
+			bool		_status;
+
+			MPI_Request * _request;
+	};
+
 }
 
 
@@ -214,7 +212,7 @@ void MPIConnection::acceptNB()
 
 	LBASSERT( _impl->_asyncConnection == 0 )
 
-	_impl->_asyncConnection = new detail::AsyncConnection(&_impl->_peerRank, _impl->_rank, _impl->_mpiPort, &_impl->_interComm, request);
+	_impl->_asyncConnection = new detail::AsyncConnection(_impl, request);
 }
 
 ConnectionPtr MPIConnection::acceptSync()
