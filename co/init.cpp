@@ -54,7 +54,22 @@ bool _init( const int argc, char** argv )
         return true;
 
 #ifdef COLLAGE_USE_MPI
-	MPI_Init((int*) &argc, &argv);
+	int threadSupportProvided = -1;
+	MPI_Init_thread((int*) &argc, &argv, MPI_THREAD_MULTIPLE, &threadSupportProvided);
+
+	if (threadSupportProvided == MPI_THREAD_SINGLE)
+		LBINFO<<"MPI thread support provided: MPI_THREAD_SINGLE"<<std::endl;
+	else if	(threadSupportProvided == MPI_THREAD_FUNNELED)
+		LBINFO<<"MPI thread support provided: MPI_THREAD_FUNNELED"<<std::endl;
+	else if (threadSupportProvided == MPI_THREAD_SERIALIZED)
+		LBINFO<<"MPI thread support provided: MPI_THREAD_SERIALIZED"<<std::endl;
+	else if (threadSupportProvided == MPI_THREAD_MULTIPLE)
+		LBINFO<<"MPI thread support provided: MPI_THREAD_MULTIPLE"<<std::endl;
+	else
+	{
+		LBERROR<<"MPI thread support provided: unknown"<<std::endl;
+		return false;
+	}
 #endif
 
     if( !lunchbox::init( argc, argv ))
