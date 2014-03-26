@@ -54,6 +54,13 @@ bool _init( const int argc, char** argv )
         return true;
 
 #ifdef COLLAGE_USE_MPI
+
+	/* MPI_Init_thread and MPI_Finalize: 
+		Should only be called once.
+		Should only be called by a single thread
+		Both should be called by the same thread, known as the main thread.
+	*/
+
 	int threadSupportProvided = -1;
 	MPI_Init_thread((int*) &argc, &argv, MPI_THREAD_MULTIPLE, &threadSupportProvided);
 

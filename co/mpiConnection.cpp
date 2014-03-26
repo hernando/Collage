@@ -177,8 +177,6 @@ bool MPIConnection::connect()
 
 	std::cout<<"CLIENTE "<<_impl->_mpiPort<<std::endl;
 
-	sleep(4);
-
 	if (MPI_SUCCESS != MPI_Comm_connect(_impl->_mpiPort, MPI_INFO_NULL, _impl->_peerRank, MPI_COMM_SELF, &_impl->_interComm))
 	{
         LBERROR << "Could not connect to "<< _impl->_peerRank << " process."<< std::endl;
@@ -186,6 +184,16 @@ bool MPIConnection::connect()
 	}
 
 	std::cout<<"CLIENTE CONNECTED"<<std::endl;
+
+	#if 0
+	int size = -1;
+	MPI_Comm_size(_impl->_interComm, &size);
+	std::cout<<"SIZEEEEEEEEEEEEE "<<size<<std::endl;
+	LBASSERT(size == 2);
+
+	MPI_Comm_rank(_impl->_interComm, &_impl->_rank);
+	_impl->_peerRank = _impl->_rank ? 0 : 1;
+	#endif
 
     _setState( STATE_CONNECTED );
 
@@ -251,38 +259,70 @@ ConnectionPtr MPIConnection::acceptSync()
 
 	std::cout<<"ACEPPPPPPPPPPPPPPPPPPPPPP " <<_impl->_peerRank<<std::endl;
 
+	#if 0
+	int size = -1;
+	MPI_Comm_size(_impl->_interComm, &size);
+	std::cout<<"SIZEEEEEEEEEEEEE "<<size<<std::endl;
+	LBASSERT(size == 2);
 
+	MPI_Comm_rank(_impl->_interComm, &_impl->_rank);
+	_impl->_peerRank = _impl->_rank ? 0 : 1;
+	#endif
 
-#if 0
-    ConstConnectionDescriptionPtr description = getDescription();
-    MPIConnection* newConnection = new MPIConnection( );
-    newConnection->_setState( STATE_CONNECTED );
-    ConnectionPtr connection( newConnection ); // to keep ref-counting correct
-#endif
-	return 0;
+    _setState( STATE_CONNECTED );
+
+    LBINFO << "Accepted " << getDescription()->toString() << std::endl;
+
+	return this;
 }
 
 void MPIConnection::readNB( void* buffer, const uint64_t bytes )
 {
-	buffer = 0;
-	if (bytes && buffer)
-		return;
+    if( isClosed() )
+        return;
+
+	_impl->_requests.insert(std::pair<void*,MPI_Request>(buffer, MPI_Request {}));
+	MPI_Request * request = &(_impl->_requests.find(buffer)->second);
+
+	if (MPI_SUCCESS != MPI_Irecv(buffer, bytes, MPI_BYTE, 0, 0, _impl->_interComm, request))
+	{
+		LBWARN << "Read error" << lunchbox::sysError << std::endl;
+	}
 }
 
-int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool block )
+int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool ignored)
 {
-	buffer = 0;
-	if (block  && buffer)
-		return 0;
+	if (ignored){}
+    if( !isConnected())
+        return -1;
+
+	std::map<void*,MPI_Request>::iterator it = _impl->_requests.find(buffer);
+	LBASSERT( it != _impl->_requests.end() )
+	MPI_Request * request = &(it->second);
+
+	if (MPI_SUCCESS != MPI_Wait(request, NULL))
+	{
+		LBWARN << "Read error" << lunchbox::sysError << std::endl;
+		return -1;
+	}
+
+	_impl->_requests.erase(it);
+
 	return bytes;
 }
 
 int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
 {
-	buffer = 0;
-	if (buffer)
-		return bytes;
-	return 0;
+    if( !isConnected())
+        return -1;
+		
+	if (MPI_SUCCESS != MPI_Send((void*)buffer, bytes, MPI_BYTE, 0, 0, _impl->_interComm)) 
+	{
+		LBWARN << "Write error" << lunchbox::sysError << std::endl;
+		return -1;
+	}
+
+	return bytes;
 }
 
 }

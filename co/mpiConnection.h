@@ -53,7 +53,7 @@ class MPIConnection : public Connection
 
     protected:
 		void readNB( void* buffer, const uint64_t bytes );
-		int64_t readSync( void* buffer, const uint64_t bytes, const bool block );
+		int64_t readSync( void* buffer, const uint64_t bytes, const bool ignored);
 		int64_t write( const void* buffer, const uint64_t bytes );
 
 	private:
