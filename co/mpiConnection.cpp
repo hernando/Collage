@@ -51,42 +51,36 @@ namespace detail
 			{
 				if (MPI_SUCCESS != MPI_Wait(_request, NULL))
 				{
-					LBERROR << "Could not start accepting a MPI connection."<< std::endl;
+					LBERROR << "Error waiting for peer rank in a MPI connection."<< std::endl;
 					_status = false;
 					return;
 				}
 				delete _request;
 
-				std::cout<<"SERVER RECIBIDO RANK "<<*_peerRank<<std::endl;
-
 				if (MPI_SUCCESS != MPI_Open_port(MPI_INFO_NULL, _mpiPort))
 				{
-					LBERROR << "Error accepting a MPI connection."<< std::endl;
+					LBERROR << "Error openning a port in a MPI connection."<< std::endl;
 					_status = false;
 					return;
 				}
-
-				std::cout<<"SERVER CREADO PUERTO "<<_mpiPort<<std::endl;
 
 				if (MPI_SUCCESS != MPI_Send(_mpiPort, MPI_MAX_PORT_NAME, MPI_CHAR, *_peerRank, 0, MPI_COMM_WORLD))
 				{
-					LBERROR << "Error accepting a MPI connection."<< std::endl;
+					LBERROR << "Error sending name port to peer in a MPI connection."<< std::endl;
 					_status = false;
 					return;
 				}
-				std::cout<<"SERVER MANDADO PUERTO "<<std::endl;
 
 				if ( MPI_SUCCESS != MPI_Comm_accept(_mpiPort, MPI_INFO_NULL, _rank, MPI_COMM_SELF, _interComm))
 				{
-					LBERROR << "Error accepting a MPI connection."<< std::endl;
+					LBERROR << "Error accepting peer in a MPI connection."<< std::endl;
 					_status = false;
 					return;
 				}
-				std::cout<<"SERVER ACEPTADO CLIENTE"<<std::endl;
 
 				if (MPI_SUCCESS != MPI_Close_port(_mpiPort))
 				{
-					LBERROR << "Error accepting a MPI connection."<< std::endl;
+					LBERROR << "Error closing a port in aMPI connection."<< std::endl;
 					_status = false;
 					return;
 				}
@@ -160,40 +154,23 @@ bool MPIConnection::connect()
 	ConnectionDescriptionPtr description = _getDescription();
 	_impl->_peerRank = description->port;
 
-	std::cout<<"CLIENTE CONECTANDO CON "<<_impl->_peerRank<<std::endl;
-
 	if (MPI_SUCCESS != MPI_Send(&_impl->_rank, 1, MPI_INT, _impl->_peerRank, 0, MPI_COMM_WORLD))
 	{
         LBERROR << "Could not connect to "<< _impl->_peerRank << " process."<< std::endl;
 		return false;
 	}
 
-	std::cout<<"CLIENTE RANK SENDED"<<std::endl;
 	if (MPI_SUCCESS != MPI_Recv(_impl->_mpiPort, MPI_MAX_PORT_NAME, MPI_CHAR, _impl->_peerRank, 0, MPI_COMM_WORLD, NULL))
 	{
-        LBERROR << "Could not connect to "<< _impl->_peerRank << " process."<< std::endl;
+        LBERROR << "Could not receive name port from "<< _impl->_peerRank << " process."<< std::endl;
 		return false;
 	}
-
-	std::cout<<"CLIENTE "<<_impl->_mpiPort<<std::endl;
 
 	if (MPI_SUCCESS != MPI_Comm_connect(_impl->_mpiPort, MPI_INFO_NULL, _impl->_peerRank, MPI_COMM_SELF, &_impl->_interComm))
 	{
         LBERROR << "Could not connect to "<< _impl->_peerRank << " process."<< std::endl;
 		return false;
 	}
-
-	std::cout<<"CLIENTE CONNECTED"<<std::endl;
-
-	#if 0
-	int size = -1;
-	MPI_Comm_size(_impl->_interComm, &size);
-	std::cout<<"SIZEEEEEEEEEEEEE "<<size<<std::endl;
-	LBASSERT(size == 2);
-
-	MPI_Comm_rank(_impl->_interComm, &_impl->_rank);
-	_impl->_peerRank = _impl->_rank ? 0 : 1;
-	#endif
 
     _setState( STATE_CONNECTED );
 
@@ -217,22 +194,21 @@ void MPIConnection::close()
     if( isClosed( ))
         return;
 
-	MPI_Comm_disconnect(&_impl->_interComm);
+	if (!isListening())
+		MPI_Comm_disconnect(&_impl->_interComm);
 
     _setState( STATE_CLOSED );
 }
 
 void MPIConnection::acceptNB()
 {
-
 	MPI_Request * request = new MPI_Request;
-
-	std::cout<<"SERVER SOY "<<_impl->_rank<<std::endl;
 
 	// Recieve the peer rank
 	if (MPI_SUCCESS != MPI_Irecv(&_impl->_peerRank, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, request))
 	{
 		LBERROR << "Could not start accepting a MPI connection."<< std::endl;
+		close();
 		return;
 	}
 
@@ -246,9 +222,12 @@ ConnectionPtr MPIConnection::acceptSync()
     if( !isListening( ))
         return 0;
 	
+	LBASSERT(_impl->_asyncConnection != 0)
+
 	if (!_impl->_asyncConnection->wait())
 	{
 		LBERROR << "Error accepting a MPI connection."<< std::endl;
+		close();
 		return 0;
 	}
 	
@@ -257,23 +236,16 @@ ConnectionPtr MPIConnection::acceptSync()
 
     LBASSERT( _impl->_peerRank >= 0 );
 
-	std::cout<<"ACEPPPPPPPPPPPPPPPPPPPPPP " <<_impl->_peerRank<<std::endl;
+    MPIConnection* newConnection = new MPIConnection();
+	newConnection->_impl->_interComm = _impl->_interComm;
+    newConnection->_setState( STATE_CONNECTED );
 
-	#if 0
-	int size = -1;
-	MPI_Comm_size(_impl->_interComm, &size);
-	std::cout<<"SIZEEEEEEEEEEEEE "<<size<<std::endl;
-	LBASSERT(size == 2);
-
-	MPI_Comm_rank(_impl->_interComm, &_impl->_rank);
-	_impl->_peerRank = _impl->_rank ? 0 : 1;
-	#endif
-
-    _setState( STATE_CONNECTED );
+	// Init interComm, avoid errors
+	_impl->_interComm = MPI_Comm{};
 
     LBINFO << "Accepted " << getDescription()->toString() << std::endl;
 
-	return this;
+	return newConnection;
 }
 
 void MPIConnection::readNB( void* buffer, const uint64_t bytes )
@@ -287,6 +259,7 @@ void MPIConnection::readNB( void* buffer, const uint64_t bytes )
 	if (MPI_SUCCESS != MPI_Irecv(buffer, bytes, MPI_BYTE, 0, 0, _impl->_interComm, request))
 	{
 		LBWARN << "Read error" << lunchbox::sysError << std::endl;
+		close();
 	}
 }
 
@@ -303,6 +276,7 @@ int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool 
 	if (MPI_SUCCESS != MPI_Wait(request, NULL))
 	{
 		LBWARN << "Read error" << lunchbox::sysError << std::endl;
+		close();
 		return -1;
 	}
 
@@ -319,6 +293,7 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
 	if (MPI_SUCCESS != MPI_Send((void*)buffer, bytes, MPI_BYTE, 0, 0, _impl->_interComm)) 
 	{
 		LBWARN << "Write error" << lunchbox::sysError << std::endl;
+		close();
 		return -1;
 	}
 
