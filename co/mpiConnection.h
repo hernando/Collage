@@ -39,6 +39,8 @@ class MPIConnection : public Connection
         /** Construct a new MPI connection. */
         CO_API MPIConnection();
 
+        MPIConnection(detail::MPIConnection * impl);
+
         /** Destruct this MPI connection. */
         CO_API ~MPIConnection();
 
