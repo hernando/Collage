@@ -22,14 +22,15 @@
 
 #include <boost/version.hpp>
 #include <boost/interprocess/ipc/message_queue.hpp>
+#include <boost/interprocess/exceptions.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/lexical_cast.hpp>
 
 
-#define MAX_MESSAGE_NUMBER 100
-#define MAX_MESSAGE_SIZE 1024
+#define MAX_MESSAGE_NUMBER 1024
+#define MAX_MESSAGE_SIZE sizeof(int[1024])
 
 namespace co
 {
@@ -137,16 +138,25 @@ namespace detail
 																					MAX_MESSAGE_NUMBER,
 																					MAX_MESSAGE_SIZE);
 					}
-					catch(...)
+					catch(boost::interprocess::interprocess_exception &ex)
 					{
-						LBERROR<<"Error creating message queues for thread communication"<<std::endl;
+						LBERROR<<"Error creating message queues for thread communication: "<<ex.what()<<std::endl;
 						_status = false;
 						return;
 					}
 
-					//TESTING COMMUNICATION
-					int test = 123456;
-					_detail->_writeQ->send(&test, 1, 0);
+					try
+					{
+						//TESTING COMMUNICATION
+						int test = 123456;
+						_detail->_writeQ->send(&test, sizeof(int), 0);
+					}
+					catch(boost::interprocess::interprocess_exception &ex)
+					{
+						LBINFO<<"Testing thread connetion: No OK"<<std::endl;
+						LBERROR<<"Message queues do not work: "<<ex.what()<<std::endl;
+						_status = false;
+					}
 
 					// Sending sizes of the queue names and queues
 					int sN[2];
@@ -245,12 +255,13 @@ MPIConnection::~MPIConnection()
 	{
 		try
 		{
+			LBINFO<<"Removing message queues"<<std::endl;
 			boost::interprocess::message_queue::remove(_impl->_nameReadQ.c_str());
 			boost::interprocess::message_queue::remove(_impl->_nameWriteQ.c_str());
 		}
-		catch(...)
+		catch(boost::interprocess::interprocess_exception &ex)
 		{
-			LBERROR<<"Error removing message queue"<<std::endl;
+			LBERROR<<"Error removing message queue:"<<ex.what()<<std::endl;
 		}
 	}
 	
@@ -320,9 +331,9 @@ bool MPIConnection::connect()
 			_impl->_writeQ= new boost::interprocess::message_queue(	boost::interprocess::open_only,
 																		nameW);
 		}
-		catch(...)
+		catch(boost::interprocess::interprocess_exception &ex)
 		{
-			LBERROR<<"Could not create message queues for thread communication"<<std::endl;
+			LBERROR<<"Could not create message queues for thread communication: "<<ex.what()<<std::endl;
 			return false;
 		}
 
@@ -331,35 +342,29 @@ bool MPIConnection::connect()
 			try
 			{
 				#if BOOST_VERSION >= 105500
-					int test = -1;
-					boost::interprocess::size_type recvd_size;
-					unsigned int p = 0;
-					_impl->_readQ->receive(&test, 1, recvd_size, p);
-
-					LBINFO<<"OK"<<std::endl;
-
-					std::cout<<test<<std::endl;
+					boost::interprocess::message_queue::size_type recvd_size;
 				#elif BOOST_VERSION >= 104600
-					int test = -1;
 					std::size_t recvd_size;
-					unsigned int p = 0;
-					_impl->_readQ->receive(&test, 1, recvd_size, p);
-
-					LBINFO<<"OK"<<std::endl;
-
-					std::cout<<test<<std::endl;
 				#endif
+
+				int test[MAX_MESSAGE_SIZE];
+				unsigned int p;
+				_impl->_readQ->receive(&test[0], MAX_MESSAGE_SIZE, recvd_size, p);
+
+				LBASSERT( test[0] == 123456 )
+
+				LBINFO<<"Testing thread connetion: OK recived "<<recvd_size<<" bytes"<<std::endl;
 			}
-			catch(...)
+			catch(boost::interprocess::interprocess_exception &ex)
 			{
 				LBINFO<<"Testing thread connetion: No OK"<<std::endl;
-				LBERROR<<"Message queues not work"<<std::endl;
+				LBERROR<<"Message queues do not work: "<<ex.what()<<std::endl;
 				return false;
 			}
 		}
 		else
 		{
-			LBERROR<<"Message queues not work"<<std::endl;
+			LBERROR<<"Message queues do not work"<<std::endl;
 			return false;
 		}
 	}
