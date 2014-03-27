@@ -28,6 +28,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/lexical_cast.hpp>
 
+#include <string.h>
 
 #define MAX_MESSAGE_NUMBER 1024
 #define MAX_MESSAGE_SIZE sizeof(int[1024])
@@ -468,6 +469,7 @@ void MPIConnection::readNB( void* buffer, const uint64_t bytes )
 
 	if (_impl->_threadComm)
 	{
+		return;
 	}
 	else
 	{
@@ -482,14 +484,45 @@ void MPIConnection::readNB( void* buffer, const uint64_t bytes )
 	}
 }
 
-int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool ignored)
+int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
 {
-	if (ignored){}
     if( !isConnected())
         return -1;
 
 	if (_impl->_threadComm)
 	{
+		if (_impl->_readQ->get_num_msg() == 0)
+			return 0;
+
+		if (bytes > MAX_MESSAGE_SIZE)
+		{
+		}
+		else
+		{
+			try
+			{
+				#if BOOST_VERSION >= 105500
+					boost::interprocess::message_queue::size_type recvd_size;
+				#elif BOOST_VERSION >= 104600
+					std::size_t recvd_size;
+				#endif
+
+				int auxBuffer[MAX_MESSAGE_SIZE];
+				unsigned int p;
+				_impl->_readQ->receive(&auxBuffer[0], MAX_MESSAGE_SIZE, recvd_size, p);
+
+				memcpy(buffer, &auxBuffer[0], recvd_size);
+
+				LBASSERT(recvd_size == bytes);
+
+			}
+			catch(boost::interprocess::interprocess_exception &ex)
+			{
+				LBERROR<<"Message queues do not work: "<<ex.what()<<std::endl;
+				close();
+				return 0;
+			}
+		}
 	}
 	else
 	{
@@ -517,6 +550,22 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
 		
 	if (_impl->_threadComm)
 	{
+		if (bytes > MAX_MESSAGE_SIZE)
+		{
+		}
+		else
+		{
+			try
+			{
+				_impl->_writeQ->send(buffer, bytes, 0);
+			}
+			catch(boost::interprocess::interprocess_exception &ex)
+			{
+				LBERROR<<"Message queues do not work: "<<ex.what()<<std::endl;
+				close();
+				return -1;
+			}
+		}
 	}
 	else
 	{
