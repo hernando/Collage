@@ -20,7 +20,16 @@
 #include "mpiConnection.h"
 #include "connectionDescription.h"
 
+#include <boost/version.hpp>
 #include <boost/interprocess/ipc/message_queue.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <boost/lexical_cast.hpp>
+
+
+#define MAX_MESSAGE_NUMBER 100
+#define MAX_MESSAGE_SIZE 1024
 
 namespace co
 {
@@ -38,7 +47,8 @@ namespace detail
 							_readQ(0),
 							_writeQ(0),
 							_asyncConnection(0),
-							_threadComm(false)
+							_threadComm(false),
+							_master(false)
 			{
 				// Ask rank of the process
 				if (MPI_SUCCESS != MPI_Comm_rank(MPI_COMM_WORLD, &_rank))
@@ -57,12 +67,15 @@ namespace detail
 			MPI_Comm						_interComm;
 
 			// InterThread communication
-			boost::interprocess::message_queue * _readQ;
-			boost::interprocess::message_queue * _writeQ;
+			boost::interprocess::message_queue *	_readQ;
+			boost::interprocess::message_queue *	_writeQ;
+			std::string								_nameReadQ;
+			std::string								_nameWriteQ;
 			
 			AsyncConnection * _asyncConnection;
 			
 			bool _threadComm;
+			bool _master;
 	};
 
 	class AsyncConnection : lunchbox::Thread
@@ -104,6 +117,54 @@ namespace detail
 
 				if (_detail->_threadComm)
 				{
+					_detail->_master = true;
+
+					// Creating message queues
+					boost::uuids::uuid nameReadQ = boost::uuids::random_generator()();
+					boost::uuids::uuid nameWriteQ= boost::uuids::random_generator()();
+					_detail->_nameReadQ = boost::lexical_cast<std::string>(nameReadQ);
+					_detail->_nameWriteQ = boost::lexical_cast<std::string>(nameWriteQ);
+
+					try
+					{
+						_detail->_readQ = new boost::interprocess::message_queue(	boost::interprocess::create_only,
+																					_detail->_nameReadQ.c_str(),
+																					MAX_MESSAGE_NUMBER,
+																					MAX_MESSAGE_SIZE);
+
+						_detail->_writeQ = new boost::interprocess::message_queue(	boost::interprocess::create_only,
+																					_detail->_nameWriteQ.c_str(),
+																					MAX_MESSAGE_NUMBER,
+																					MAX_MESSAGE_SIZE);
+					}
+					catch(...)
+					{
+						LBERROR<<"Error creating message queues for thread communication"<<std::endl;
+						_status = false;
+						return;
+					}
+
+					//TESTING COMMUNICATION
+					int test = 123456;
+					_detail->_writeQ->send(&test, 1, 0);
+
+					// Sending sizes of the queue names and queues
+					int sN[2];
+					sN[0] = _detail->_nameReadQ.size();
+					sN[1] = _detail->_nameWriteQ.size();
+					if (MPI_SUCCESS != MPI_Send(sN, 2, MPI_INT, _detail->_peerRank, 0, MPI_COMM_WORLD))
+					{
+						LBERROR << "Error sending name port to peer in a MPI connection."<< std::endl;
+						_status = false;
+						return;
+					}
+					std::string nameQ = _detail->_nameReadQ + _detail->_nameWriteQ;
+					if (MPI_SUCCESS != MPI_Send((void*)nameQ.c_str(), sN[0]+sN[1], MPI_CHAR, _detail->_peerRank, 0, MPI_COMM_WORLD))
+					{
+						LBERROR << "Error sending name port to peer in a MPI connection."<< std::endl;
+						_status = false;
+						return;
+					}
 				}
 				else
 				{
@@ -172,19 +233,32 @@ MPIConnection::MPIConnection(detail::MPIConnection * impl) :
 
 MPIConnection::~MPIConnection()
 {
+	close();
+
 	if (_impl->_asyncConnection!= 0)
 		delete _impl->_asyncConnection;
 	
 	if (_impl->_readQ != 0 && _impl->_readQ->get_num_msg() > 0)
 		LBINFO << "Communication closed with pending messages"<<std::endl;
+
+	if (_impl->_master)
+	{
+		try
+		{
+			boost::interprocess::message_queue::remove(_impl->_nameReadQ.c_str());
+			boost::interprocess::message_queue::remove(_impl->_nameWriteQ.c_str());
+		}
+		catch(...)
+		{
+			LBERROR<<"Error removing message queue"<<std::endl;
+		}
+	}
 	
 	if (_impl->_readQ != 0)
 		delete _impl->_readQ;
 
 	if (_impl->_writeQ != 0)
 		delete _impl->_writeQ;
-
-	close();
 
 	delete _impl;
 }
@@ -212,6 +286,82 @@ bool MPIConnection::connect()
 
 	if (_impl->_threadComm)
 	{
+		int sN[2];
+		if (MPI_SUCCESS != MPI_Recv(sN, 2, MPI_INT, _impl->_peerRank, 0, MPI_COMM_WORLD, NULL))
+		{
+			LBERROR << "Could not receive name port from "<< _impl->_peerRank << " process."<< std::endl;
+			return false;
+		}
+
+		LBASSERT(sN[0] > 0);
+		LBASSERT(sN[1] > 0);
+
+		char name[sN[0]+sN[1]];
+		if (MPI_SUCCESS != MPI_Recv(name, sN[0]+sN[1], MPI_CHAR, _impl->_peerRank, 0, MPI_COMM_WORLD, NULL))
+		{
+			LBERROR << "Could not receive name port from "<< _impl->_peerRank << " process."<< std::endl;
+			return false;
+		}
+		char nameW[sN[0]+1];
+		char nameR[sN[1]+1];
+		for(int i=0; i<sN[0]; i++)
+			nameW[i] = name[i];
+		for(int i=0; i<sN[1]; i++)
+			nameR[i] = name[sN[0]+i];
+
+		nameW[sN[0]] = '\0';
+		nameR[sN[1]] = '\0';
+
+		try
+		{
+			_impl->_readQ = new boost::interprocess::message_queue(	boost::interprocess::open_only,
+																		nameR);
+
+			_impl->_writeQ= new boost::interprocess::message_queue(	boost::interprocess::open_only,
+																		nameW);
+		}
+		catch(...)
+		{
+			LBERROR<<"Could not create message queues for thread communication"<<std::endl;
+			return false;
+		}
+
+		if (_impl->_readQ->get_num_msg() > 0)
+		{
+			try
+			{
+				#if BOOST_VERSION >= 105500
+					int test = -1;
+					boost::interprocess::size_type recvd_size;
+					unsigned int p = 0;
+					_impl->_readQ->receive(&test, 1, recvd_size, p);
+
+					LBINFO<<"OK"<<std::endl;
+
+					std::cout<<test<<std::endl;
+				#elif BOOST_VERSION >= 104600
+					int test = -1;
+					std::size_t recvd_size;
+					unsigned int p = 0;
+					_impl->_readQ->receive(&test, 1, recvd_size, p);
+
+					LBINFO<<"OK"<<std::endl;
+
+					std::cout<<test<<std::endl;
+				#endif
+			}
+			catch(...)
+			{
+				LBINFO<<"Testing thread connetion: No OK"<<std::endl;
+				LBERROR<<"Message queues not work"<<std::endl;
+				return false;
+			}
+		}
+		else
+		{
+			LBERROR<<"Message queues not work"<<std::endl;
+			return false;
+		}
 	}
 	else
 	{
