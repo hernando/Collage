@@ -20,18 +20,63 @@
 #include "mpiConnection.h"
 #include "connectionDescription.h"
 
-#include <boost/version.hpp>
-#include <boost/interprocess/ipc/message_queue.hpp>
-#include <boost/interprocess/exceptions.hpp>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
-#include <boost/lexical_cast.hpp>
+#include <lunchbox/scopedMutex.h>
 
-#include <string.h>
+#include <set>
 
-#define MAX_MESSAGE_NUMBER 1024
-#define MAX_MESSAGE_SIZE sizeof(int[1024])
+namespace
+{
+	static class TagManager
+	{
+		public:
+			TagManager() : _nextTag(0)
+			{
+			}
+
+			bool registerTag(int16_t tag)
+			{
+				lunchbox::ScopedMutex<> mutex( _lock );
+
+				if (_tags.find(tag) != _tags.end())
+					return false;
+
+				_tags.insert(tag);
+
+				return true;
+			}
+
+			void deregisterTag(int16_t tag)
+			{
+				lunchbox::ScopedMutex<> mutex( _lock );
+
+				_tags.erase(tag);
+			}
+
+			int32_t getTag()
+			{
+				lunchbox::ScopedMutex<> mutex( _lock );
+
+				do
+				{
+					_nextTag++;
+					LBASSERT(_nextTag > 0)
+				}
+				while(_tags.find(_nextTag) != _tags.end());
+
+				_tags.insert(_nextTag);
+
+				std::cout<<"TAG "<<_nextTag<<std::endl;
+
+				return _nextTag; 
+			}
+
+		private:
+			std::set<int16_t>	_tags;
+			int16_t				_nextTag;
+			lunchbox::Lock		_lock;
+	} tagManager;
+}
+
 
 namespace co
 {
@@ -44,13 +89,10 @@ namespace detail
 	{
 		public:
 			MPIConnection() : 
-							_rank(-1),
-							_peerRank(-1),
-							_readQ(0),
-							_writeQ(0),
-							_asyncConnection(0),
-							_threadComm(false),
-							_master(false)
+							  _rank(-1)
+							, _peerRank(-1)
+							, _tag(-1)
+							, _asyncConnection(0)
 			{
 				// Ask rank of the process
 				if (MPI_SUCCESS != MPI_Comm_rank(MPI_COMM_WORLD, &_rank))
@@ -61,33 +103,24 @@ namespace detail
 				LBASSERT( _rank >= 0 );
 			}
 
-			int			_rank;
-			int			_peerRank;
+			int32_t		_rank;
+			int32_t		_peerRank;
+			int16_t		_tag;
 
-			// InterProcessor communication 
 			std::map<void *, MPI_Request>	_requests;
-			MPI_Comm						_interComm;
 
-			// InterThread communication
-			boost::interprocess::message_queue *	_readQ;
-			boost::interprocess::message_queue *	_writeQ;
-			std::string								_nameReadQ;
-			std::string								_nameWriteQ;
-			
-			AsyncConnection * _asyncConnection;
-			
-			bool _threadComm;
-			bool _master;
+			AsyncConnection *				_asyncConnection;
 	};
 
 	class AsyncConnection : lunchbox::Thread
 	{
 		public:
 
-			AsyncConnection(MPIConnection * detail, MPI_Request * request) : 
-																	_detail(detail),
-																	_status(false),
-																	_request(request)
+			AsyncConnection(MPIConnection * detail, MPI_Request * request, int16_t tag) : 
+																	  _detail(detail)
+																	, _tag(tag)
+																	, _status(false)
+																	, _request(request)
 			{
 				start();
 			}
@@ -115,110 +148,26 @@ namespace detail
 
 				LBASSERT( _detail->_peerRank >= 0 );
 
-				_detail->_threadComm = _detail->_rank == _detail->_peerRank;
+				int cTag = tagManager.getTag();
 
-				if (_detail->_threadComm)
+				// Send Tag
+				if (MPI_SUCCESS != MPI_Send(&cTag, 1, MPI_INT, _detail->_peerRank, _tag, MPI_COMM_WORLD))
 				{
-					_detail->_master = true;
-
-					// Creating message queues
-					boost::uuids::uuid nameReadQ = boost::uuids::random_generator()();
-					boost::uuids::uuid nameWriteQ= boost::uuids::random_generator()();
-					_detail->_nameReadQ = boost::lexical_cast<std::string>(nameReadQ);
-					_detail->_nameWriteQ = boost::lexical_cast<std::string>(nameWriteQ);
-
-					try
-					{
-						_detail->_readQ = new boost::interprocess::message_queue(	boost::interprocess::create_only,
-																					_detail->_nameReadQ.c_str(),
-																					MAX_MESSAGE_NUMBER,
-																					MAX_MESSAGE_SIZE);
-
-						_detail->_writeQ = new boost::interprocess::message_queue(	boost::interprocess::create_only,
-																					_detail->_nameWriteQ.c_str(),
-																					MAX_MESSAGE_NUMBER,
-																					MAX_MESSAGE_SIZE);
-					}
-					catch(boost::interprocess::interprocess_exception &ex)
-					{
-						LBERROR<<"Error creating message queues for thread communication: "<<ex.what()<<std::endl;
-						_status = false;
-						return;
-					}
-
-					try
-					{
-						//TESTING COMMUNICATION
-						int test = 123456;
-						_detail->_writeQ->send(&test, sizeof(int), 0);
-					}
-					catch(boost::interprocess::interprocess_exception &ex)
-					{
-						LBINFO<<"Testing thread connetion: No OK"<<std::endl;
-						LBERROR<<"Message queues do not work: "<<ex.what()<<std::endl;
-						_status = false;
-					}
-
-					// Sending sizes of the queue names and queues
-					int sN[2];
-					sN[0] = _detail->_nameReadQ.size();
-					sN[1] = _detail->_nameWriteQ.size();
-					if (MPI_SUCCESS != MPI_Send(sN, 2, MPI_INT, _detail->_peerRank, 0, MPI_COMM_WORLD))
-					{
-						LBERROR << "Error sending name port to peer in a MPI connection."<< std::endl;
-						_status = false;
-						return;
-					}
-					std::string nameQ = _detail->_nameReadQ + _detail->_nameWriteQ;
-					if (MPI_SUCCESS != MPI_Send((void*)nameQ.c_str(), sN[0]+sN[1], MPI_CHAR, _detail->_peerRank, 0, MPI_COMM_WORLD))
-					{
-						LBERROR << "Error sending name port to peer in a MPI connection."<< std::endl;
-						_status = false;
-						return;
-					}
+					LBERROR << "Error sending name port to peer in a MPI connection."<< std::endl;
+					_status = false;
+					return;
 				}
-				else
-				{
-					char mpiPort[MPI_MAX_PORT_NAME];
 
-					if (MPI_SUCCESS != MPI_Open_port(MPI_INFO_NULL, mpiPort))
-					{
-						LBERROR << "Error openning a port in a MPI connection."<< std::endl;
-						_status = false;
-						return;
-					}
-
-					if (MPI_SUCCESS != MPI_Send(mpiPort, MPI_MAX_PORT_NAME, MPI_CHAR, _detail->_peerRank, 0, MPI_COMM_WORLD))
-					{
-						LBERROR << "Error sending name port to peer in a MPI connection."<< std::endl;
-						_status = false;
-						return;
-					}
-
-					if ( MPI_SUCCESS != MPI_Comm_accept(mpiPort, MPI_INFO_NULL, _detail->_rank, MPI_COMM_SELF, &_detail->_interComm))
-					{
-						LBERROR << "Error accepting peer in a MPI connection."<< std::endl;
-						_status = false;
-						return;
-					}
-
-					if (MPI_SUCCESS != MPI_Close_port(mpiPort))
-					{
-						LBERROR << "Error closing a port in aMPI connection."<< std::endl;
-						_status = false;
-						return;
-					}
-				}
+				_detail->_tag = cTag;
 
 				_status = true;
 			}
 
 		private:
 			MPIConnection * _detail;
-
-			bool		_status;
-
-			MPI_Request * _request;
+			int				_tag;
+			bool			_status;
+			MPI_Request *	_request;
 	};
 
 }
@@ -249,29 +198,6 @@ MPIConnection::~MPIConnection()
 	if (_impl->_asyncConnection!= 0)
 		delete _impl->_asyncConnection;
 	
-	if (_impl->_readQ != 0 && _impl->_readQ->get_num_msg() > 0)
-		LBINFO << "Communication closed with pending messages"<<std::endl;
-
-	if (_impl->_master)
-	{
-		try
-		{
-			LBINFO<<"Removing message queues"<<std::endl;
-			boost::interprocess::message_queue::remove(_impl->_nameReadQ.c_str());
-			boost::interprocess::message_queue::remove(_impl->_nameWriteQ.c_str());
-		}
-		catch(boost::interprocess::interprocess_exception &ex)
-		{
-			LBERROR<<"Error removing message queue:"<<ex.what()<<std::endl;
-		}
-	}
-	
-	if (_impl->_readQ != 0)
-		delete _impl->_readQ;
-
-	if (_impl->_writeQ != 0)
-		delete _impl->_writeQ;
-
 	delete _impl;
 }
 
@@ -285,110 +211,32 @@ bool MPIConnection::connect()
     _setState( STATE_CONNECTING );
 
 	ConnectionDescriptionPtr description = _getDescription();
-	_impl->_peerRank = description->port;
+	_impl->_peerRank = description->rank;
+	int cTag = description->port;
 
-	// Same ranks then thread comminication
-	_impl->_threadComm = _impl->_rank == _impl->_peerRank;
-
-	if (MPI_SUCCESS != MPI_Send(&_impl->_rank, 1, MPI_INT, _impl->_peerRank, 0, MPI_COMM_WORLD))
+	if (MPI_SUCCESS != MPI_Send(&_impl->_rank, 1, MPI_INT, _impl->_peerRank, cTag, MPI_COMM_WORLD))
 	{
 		LBERROR << "Could not connect to "<< _impl->_peerRank << " process."<< std::endl;
 		return false;
 	}
 
-	if (_impl->_threadComm)
+	int tag = -1;
+
+	if (MPI_SUCCESS != MPI_Recv(&tag, 1, MPI_INT, _impl->_peerRank, cTag, MPI_COMM_WORLD, NULL))
 	{
-		int sN[2];
-		if (MPI_SUCCESS != MPI_Recv(sN, 2, MPI_INT, _impl->_peerRank, 0, MPI_COMM_WORLD, NULL))
-		{
-			LBERROR << "Could not receive name port from "<< _impl->_peerRank << " process."<< std::endl;
-			return false;
-		}
-
-		LBASSERT(sN[0] > 0);
-		LBASSERT(sN[1] > 0);
-
-		char name[sN[0]+sN[1]];
-		if (MPI_SUCCESS != MPI_Recv(name, sN[0]+sN[1], MPI_CHAR, _impl->_peerRank, 0, MPI_COMM_WORLD, NULL))
-		{
-			LBERROR << "Could not receive name port from "<< _impl->_peerRank << " process."<< std::endl;
-			return false;
-		}
-		char nameW[sN[0]+1];
-		char nameR[sN[1]+1];
-		for(int i=0; i<sN[0]; i++)
-			nameW[i] = name[i];
-		for(int i=0; i<sN[1]; i++)
-			nameR[i] = name[sN[0]+i];
-
-		nameW[sN[0]] = '\0';
-		nameR[sN[1]] = '\0';
-
-		try
-		{
-			_impl->_readQ = new boost::interprocess::message_queue(	boost::interprocess::open_only,
-																		nameR);
-
-			_impl->_writeQ= new boost::interprocess::message_queue(	boost::interprocess::open_only,
-																		nameW);
-		}
-		catch(boost::interprocess::interprocess_exception &ex)
-		{
-			LBERROR<<"Could not create message queues for thread communication: "<<ex.what()<<std::endl;
-			return false;
-		}
-
-		if (_impl->_readQ->get_num_msg() > 0)
-		{
-			try
-			{
-				#if BOOST_VERSION >= 105500
-					boost::interprocess::message_queue::size_type recvd_size;
-				#elif BOOST_VERSION >= 104600
-					std::size_t recvd_size;
-				#endif
-
-				int test[MAX_MESSAGE_SIZE];
-				unsigned int p;
-				_impl->_readQ->receive(&test[0], MAX_MESSAGE_SIZE, recvd_size, p);
-
-				LBASSERT( test[0] == 123456 )
-
-				LBINFO<<"Testing thread connetion: OK recived "<<recvd_size<<" bytes"<<std::endl;
-			}
-			catch(boost::interprocess::interprocess_exception &ex)
-			{
-				LBINFO<<"Testing thread connetion: No OK"<<std::endl;
-				LBERROR<<"Message queues do not work: "<<ex.what()<<std::endl;
-				return false;
-			}
-		}
-		else
-		{
-			LBERROR<<"Message queues do not work"<<std::endl;
-			return false;
-		}
+		LBERROR << "Could not receive name port from "<< _impl->_peerRank << " process."<< std::endl;
+		return false;
 	}
-	else
-	{
-		char mpiPort[MPI_MAX_PORT_NAME];
 
-		if (MPI_SUCCESS != MPI_Recv(mpiPort, MPI_MAX_PORT_NAME, MPI_CHAR, _impl->_peerRank, 0, MPI_COMM_WORLD, NULL))
-		{
-			LBERROR << "Could not receive name port from "<< _impl->_peerRank << " process."<< std::endl;
-			return false;
-		}
+	// Check tag is correct
+	LBASSERT( tag > 0 );
 
-		if (MPI_SUCCESS != MPI_Comm_connect(mpiPort, MPI_INFO_NULL, _impl->_peerRank, MPI_COMM_SELF, &_impl->_interComm))
-		{
-			LBERROR << "Could not connect to "<< _impl->_peerRank << " process."<< std::endl;
-			return false;
-		}
-	}
+	// set a default tag
+	_impl->_tag = tag;
 
     _setState( STATE_CONNECTED );
 
-    LBINFO << "Connected " << description->toString() << std::endl;
+    LBINFO << "Connected with rank " <<_impl->_peerRank<<" on tag "<<_impl->_tag<< std::endl;
 
 	return true;
 }
@@ -397,6 +245,19 @@ bool MPIConnection::listen()
 {
     if( !isClosed( ))
         return false;
+
+	// Set tag for listening
+	int16_t tag = getDescription()->port;
+
+	// Register tag
+	if ( !tagManager.registerTag(tag) )
+	{
+		LBERROR<<"Tag "<<tag<<" is already register"<<std::endl;
+		return false;
+	}
+	_impl->_tag = tag;
+
+	LBINFO<<"MPI Connection, rank "<<_impl->_rank<<" listening on tag "<<_impl->_tag<<std::endl;
 
     _setState( STATE_LISTENING );
 
@@ -408,14 +269,14 @@ void MPIConnection::close()
     if( isClosed( ))
         return;
 
-	if (!isListening() && !_impl->_threadComm)
-		MPI_Comm_disconnect(&_impl->_interComm);
-
     _setState( STATE_CLOSED );
 }
 
 void MPIConnection::acceptNB()
 {
+	// Ensure tag is register
+	LBASSERT( _impl->_tag != -1 );
+
 	// Avoid multiple accepting process at the same time
 	// To start a new accept proccess first call acceptSync to finish the last one.
 	LBASSERT( _impl->_asyncConnection == 0 )
@@ -425,14 +286,14 @@ void MPIConnection::acceptNB()
 	detail::MPIConnection * newImpl = new detail::MPIConnection();
 
 	// Recieve the peer rank
-	if (MPI_SUCCESS != MPI_Irecv(&newImpl->_peerRank, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, request))
+	if (MPI_SUCCESS != MPI_Irecv(&newImpl->_peerRank, 1, MPI_INT, MPI_ANY_SOURCE, _impl->_tag, MPI_COMM_WORLD, request))
 	{
 		LBERROR << "Could not start accepting a MPI connection."<< std::endl;
 		close();
 		return;
 	}
 
-	_impl->_asyncConnection = new detail::AsyncConnection(newImpl, request);
+	_impl->_asyncConnection = new detail::AsyncConnection(newImpl, request, _impl->_tag);
 }
 
 ConnectionPtr MPIConnection::acceptSync()
@@ -457,7 +318,7 @@ ConnectionPtr MPIConnection::acceptSync()
     MPIConnection* newConnection = new MPIConnection(newImpl);
     newConnection->_setState( STATE_CONNECTED );
 
-    LBINFO << "Accepted " << getDescription()->toString() << std::endl;
+    LBINFO << "Accepted to rank " << newImpl->_peerRank << " on tag "<<newImpl->_tag <<std::endl;
 
 	return newConnection;
 }
@@ -467,79 +328,40 @@ void MPIConnection::readNB( void* buffer, const uint64_t bytes )
     if( isClosed() )
         return;
 
-	if (_impl->_threadComm)
-	{
+	if (buffer && bytes)
 		return;
-	}
-	else
-	{
-		_impl->_requests.insert(std::pair<void*,MPI_Request>(buffer, MPI_Request {}));
-		MPI_Request * request = &(_impl->_requests.find(buffer)->second);
+#if 0
+	_impl->_requests.insert(std::pair<void*,MPI_Request>(buffer, MPI_Request {}));
+	MPI_Request * request = &(_impl->_requests.find(buffer)->second);
 
-		if (MPI_SUCCESS != MPI_Irecv(buffer, bytes, MPI_BYTE, 0, 0, _impl->_interComm, request))
-		{
-			LBWARN << "Read error" << lunchbox::sysError << std::endl;
-			close();
-		}
+	if (MPI_SUCCESS != MPI_Irecv(buffer, bytes, MPI_BYTE, 0, 0, _impl->_interComm, request))
+	{
+		LBWARN << "Read error" << lunchbox::sysError << std::endl;
+		close();
 	}
+#endif
 }
 
 int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
 {
     if( !isConnected())
         return -1;
+#if 0
+	std::map<void*,MPI_Request>::iterator it = _impl->_requests.find(buffer);
+	LBASSERT( it != _impl->_requests.end() )
+	MPI_Request * request = &(it->second);
 
-	if (_impl->_threadComm)
+	if (MPI_SUCCESS != MPI_Wait(request, NULL))
 	{
-		if (_impl->_readQ->get_num_msg() == 0)
-			return 0;
-
-		if (bytes > MAX_MESSAGE_SIZE)
-		{
-		}
-		else
-		{
-			try
-			{
-				#if BOOST_VERSION >= 105500
-					boost::interprocess::message_queue::size_type recvd_size;
-				#elif BOOST_VERSION >= 104600
-					std::size_t recvd_size;
-				#endif
-
-				int auxBuffer[MAX_MESSAGE_SIZE];
-				unsigned int p;
-				_impl->_readQ->receive(&auxBuffer[0], MAX_MESSAGE_SIZE, recvd_size, p);
-
-				memcpy(buffer, &auxBuffer[0], recvd_size);
-
-				LBASSERT(recvd_size == bytes);
-
-			}
-			catch(boost::interprocess::interprocess_exception &ex)
-			{
-				LBERROR<<"Message queues do not work: "<<ex.what()<<std::endl;
-				close();
-				return 0;
-			}
-		}
-	}
-	else
-	{
-		std::map<void*,MPI_Request>::iterator it = _impl->_requests.find(buffer);
-		LBASSERT( it != _impl->_requests.end() )
-		MPI_Request * request = &(it->second);
-
-		if (MPI_SUCCESS != MPI_Wait(request, NULL))
-		{
-			LBWARN << "Read error" << lunchbox::sysError << std::endl;
-			close();
-			return -1;
-		}
-
-		_impl->_requests.erase(it);
+		LBWARN << "Read error" << lunchbox::sysError << std::endl;
+		close();
+		return -1;
 	}
 
+	_impl->_requests.erase(it);
+#endif
+	if (buffer && bytes)
+	return bytes;
 	return bytes;
 }
 
@@ -547,36 +369,16 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
 {
     if( !isConnected())
         return -1;
-		
-	if (_impl->_threadComm)
+#if 0	
+	if (MPI_SUCCESS != MPI_Send((void*)buffer, bytes, MPI_BYTE, 0, 0, _impl->_interComm)) 
 	{
-		if (bytes > MAX_MESSAGE_SIZE)
-		{
-		}
-		else
-		{
-			try
-			{
-				_impl->_writeQ->send(buffer, bytes, 0);
-			}
-			catch(boost::interprocess::interprocess_exception &ex)
-			{
-				LBERROR<<"Message queues do not work: "<<ex.what()<<std::endl;
-				close();
-				return -1;
-			}
-		}
+		LBWARN << "Write error" << lunchbox::sysError << std::endl;
+		close();
+		return -1;
 	}
-	else
-	{
-		if (MPI_SUCCESS != MPI_Send((void*)buffer, bytes, MPI_BYTE, 0, 0, _impl->_interComm)) 
-		{
-			LBWARN << "Write error" << lunchbox::sysError << std::endl;
-			close();
-			return -1;
-		}
-	}
-
+#endif
+	if (buffer && bytes)
+	return bytes;
 	return bytes;
 }
 
