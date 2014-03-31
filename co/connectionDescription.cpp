@@ -58,6 +58,7 @@ ConnectionDescription::ConnectionDescription( std::string& data )
         : type( CONNECTIONTYPE_TCPIP )
         , bandwidth( 0 )
         , port( 0 )
+		, rank( -1 )
         , filename( "default" )
 {
     fromString( data );
@@ -75,7 +76,7 @@ void ConnectionDescription::serialize( std::ostream& os ) const
 {
     os << type << SEPARATOR << bandwidth << SEPARATOR << hostname  << SEPARATOR
        << interfacename << SEPARATOR << port << SEPARATOR << filename
-       << SEPARATOR;
+       << SEPARATOR << rank << SEPARATOR;
 }
 
 bool ConnectionDescription::fromString( std::string& data )
@@ -288,6 +289,9 @@ std::ostream& operator << ( std::ostream& os,
 
     if( desc.port != 0 )
         os << "port          " << desc.port << std::endl;
+
+	if( desc.rank >= 0 )
+		os << "rank          " << desc.rank << std::endl;
 
     if( !desc.getFilename().empty( ))
         os << "filename      \"" << desc.getFilename() << "\"" << std::endl;

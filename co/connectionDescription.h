@@ -41,6 +41,9 @@ namespace co
         /** The listening port (TCPIP, SDP, IB, MCIP, RDMA). @version 1.0 */
         uint16_t port;
 
+		/** The rank (MPI). @version 1.2 */
+		int32_t rank;
+
         /** The hostname to bind or connect to. @version 1.0 */
         std::string hostname;
 
@@ -55,6 +58,7 @@ namespace co
                 : type( CONNECTIONTYPE_TCPIP )
                 , bandwidth( 0 )
                 , port( 0 )
+				, rank ( -1 )
                 , filename( "default" )
             {}
 
