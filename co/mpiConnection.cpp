@@ -24,6 +24,8 @@
 
 #include <set>
 
+#define MAX_SIZE_MSG 4096
+
 namespace
 {
 	static class TagManager
@@ -65,8 +67,6 @@ namespace
 
 				_tags.insert(_nextTag);
 
-				std::cout<<"TAG "<<_nextTag<<std::endl;
-
 				return _nextTag; 
 			}
 
@@ -76,7 +76,6 @@ namespace
 			lunchbox::Lock		_lock;
 	} tagManager;
 }
-
 
 namespace co
 {
@@ -106,6 +105,9 @@ namespace detail
 			int32_t		_rank;
 			int32_t		_peerRank;
 			int16_t		_tag;
+
+			// Tags 
+			std::set<int16_t>	_tags;
 
 			std::map<void *, MPI_Request>	_requests;
 
@@ -269,6 +271,11 @@ void MPIConnection::close()
     if( isClosed( ))
         return;
 
+	// Deregister tags
+	std::set<int16_t>::iterator it;
+	for (it=_impl->_tags.begin(); it!=_impl->_tags.end(); ++it)
+		tagManager.deregisterTag(*it);
+
     _setState( STATE_CLOSED );
 }
 
@@ -328,57 +335,107 @@ void MPIConnection::readNB( void* buffer, const uint64_t bytes )
     if( isClosed() )
         return;
 
-	if (buffer && bytes)
-		return;
-#if 0
-	_impl->_requests.insert(std::pair<void*,MPI_Request>(buffer, MPI_Request {}));
-	MPI_Request * request = &(_impl->_requests.find(buffer)->second);
-
-	if (MPI_SUCCESS != MPI_Irecv(buffer, bytes, MPI_BYTE, 0, 0, _impl->_interComm, request))
+	if ( bytes <= MAX_SIZE_MSG)
 	{
-		LBWARN << "Read error" << lunchbox::sysError << std::endl;
-		close();
+		_impl->_requests.insert(std::pair<void*,MPI_Request>(buffer, MPI_Request {}));
+		MPI_Request * request = &(_impl->_requests.find(buffer)->second);
+
+		if (MPI_SUCCESS != MPI_Irecv(buffer, bytes, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD, request))
+		{
+			LBWARN << "Read error" << lunchbox::sysError << std::endl;
+			close();
+		}
 	}
-#endif
+	else
+	{}
 }
 
 int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
 {
     if( !isConnected())
         return -1;
-#if 0
-	std::map<void*,MPI_Request>::iterator it = _impl->_requests.find(buffer);
-	LBASSERT( it != _impl->_requests.end() )
-	MPI_Request * request = &(it->second);
 
-	if (MPI_SUCCESS != MPI_Wait(request, NULL))
+	if ( bytes <= MAX_SIZE_MSG)
 	{
-		LBWARN << "Read error" << lunchbox::sysError << std::endl;
-		close();
-		return -1;
-	}
+		std::map<void*,MPI_Request>::iterator it = _impl->_requests.find(buffer);
+		LBASSERT( it != _impl->_requests.end() )
+		MPI_Request * request = &(it->second);
 
-	_impl->_requests.erase(it);
-#endif
-	if (buffer && bytes)
-	return bytes;
-	return bytes;
+		if (MPI_SUCCESS != MPI_Wait(request, NULL))
+		{
+			LBWARN << "Read error" << lunchbox::sysError << std::endl;
+			close();
+			return -1;
+		}
+
+		int flag = -1;
+		MPI_Status status;
+		if (MPI_SUCCESS != MPI_Request_get_status(*request, &flag, &status))
+		{
+			LBWARN << "Read error" << lunchbox::sysError << std::endl;
+			close();
+			return -1;
+		}
+
+		std::cout<<status.MPI_TAG<<std::endl;
+		LBASSERT( status.MPI_TAG == _impl->_tag );
+
+		int read = -1;
+		if (MPI_SUCCESS != MPI_Get_count(&status, MPI_BYTE, &read))
+		{
+			LBWARN << "Read error" << lunchbox::sysError << std::endl;
+			close();
+			return -1;
+		}
+
+		std::cout<<flag<<" READ "<<read<<std::endl;
+
+		_impl->_requests.erase(it);
+
+		return read;
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
 {
     if( !isConnected())
         return -1;
-#if 0	
-	if (MPI_SUCCESS != MPI_Send((void*)buffer, bytes, MPI_BYTE, 0, 0, _impl->_interComm)) 
+
+	if ( bytes <= MAX_SIZE_MSG)
 	{
-		LBWARN << "Write error" << lunchbox::sysError << std::endl;
-		close();
-		return -1;
+		if (MPI_SUCCESS != MPI_Send((void*)buffer, bytes, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD)) 
+		{
+			LBWARN << "Write error" << lunchbox::sysError << std::endl;
+			close();
+			return -1;
+		}
 	}
-#endif
-	if (buffer && bytes)
-	return bytes;
+	else
+	{
+		uint64_t offset = 0;
+		while(1)
+		{
+			uint64_t dim = offset + MAX_SIZE_MSG >= offset ? bytes - offset : MAX_SIZE_MSG;
+
+			if (MPI_SUCCESS != MPI_Ssend((void*)((unsigned char*)buffer + offset), dim, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD)) 
+			//if (MPI_SUCCESS != MPI_Send((void*)((unsigned char*)buffer + offset), dim, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD)) 
+			{
+				LBWARN << "Write error" << lunchbox::sysError << std::endl;
+				close();
+				return -1;
+			}
+
+			offset += dim;
+
+			if (offset >= bytes)
+				break;
+		}
+	}
+
 	return bytes;
 }
 
