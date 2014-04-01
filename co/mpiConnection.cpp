@@ -112,9 +112,9 @@ namespace detail
 			int16_t		_tag;
 
 			// Tags 
-			std::set<int16_t>	_tags;
+			std::set< int16_t >	_tags;
 
-			std::map<void *, std::queue<MPI_Request*>>	_requests;
+			std::map< void *, std::queue< MPI_Request* >* >	_requests;
 
 			AsyncConnection *				_asyncConnection;
 	};
@@ -281,6 +281,23 @@ void MPIConnection::close()
 	for (it=_impl->_tags.begin(); it!=_impl->_tags.end(); ++it)
 		tagManager.deregisterTag(*it);
 
+	// Cancel and delete requests
+	std::map< void*,std::queue<MPI_Request*>* >::iterator itR = _impl->_requests.begin();
+	while(itR != _impl->_requests.end())
+	{
+		std::queue<MPI_Request*> * queue = itR->second;	
+		while(queue->size() > 0)
+		{
+			MPI_Request * request = queue->front();
+			queue->pop();
+			MPI_Cancel(request);
+			delete request;
+		}
+
+		delete queue;
+		itR++;
+	}
+
     _setState( STATE_CLOSED );
 }
 
@@ -301,6 +318,7 @@ void MPIConnection::acceptNB()
 	if (MPI_SUCCESS != MPI_Irecv(&newImpl->_peerRank, 1, MPI_INT, MPI_ANY_SOURCE, _impl->_tag, MPI_COMM_WORLD, request))
 	{
 		LBERROR << "Could not start accepting a MPI connection."<< std::endl;
+        LBWARN << "Got " << lunchbox::sysError << ", closing connection" << std::endl;
 		close();
 		return;
 	}
@@ -318,6 +336,7 @@ ConnectionPtr MPIConnection::acceptSync()
 	if (!_impl->_asyncConnection->wait())
 	{
 		LBERROR << "Error accepting a MPI connection."<< std::endl;
+        LBWARN << "Got " << lunchbox::sysError << ", closing connection" << std::endl;
 		close();
 		return 0;
 	}
@@ -345,8 +364,6 @@ int64_t MPIConnection::_readSync(MPI_Request * request)
 	{
 		if (MPI_SUCCESS != MPI_Test(request, &flag, &status))
 		{
-			LBWARN << "Read error" << lunchbox::sysError << std::endl;
-			close();
 			return -1;
 		}
 
@@ -357,19 +374,9 @@ int64_t MPIConnection::_readSync(MPI_Request * request)
 		boost::this_thread::sleep(boost::posix_time::milliseconds(timeouts * TIMEOUT));
 	}
 
-	#if 0
-	if (MPI_SUCCESS != MPI_Wait(request, &status))
-	{
-		LBWARN << "Read error" << lunchbox::sysError << std::endl;
-		close();
-		return -1;
-	}
-	#endif
-
 	if (!flag)
 	{
-		MPI_Cancel(request);
-		return 0;
+		return -1;
 	}
 
 	LBASSERT( status.MPI_TAG == _impl->_tag );
@@ -377,8 +384,6 @@ int64_t MPIConnection::_readSync(MPI_Request * request)
 	int read = -1;
 	if (MPI_SUCCESS != MPI_Get_count(&status, MPI_BYTE, &read))
 	{
-		LBWARN << "Read error" << lunchbox::sysError << std::endl;
-		close();
 		return -1;
 	}
 
@@ -392,22 +397,45 @@ void MPIConnection::readNB( void* buffer, const uint64_t bytes )
 
 	if ( bytes <= MAX_SIZE_MSG)
 	{
-		_impl->_requests.insert(std::pair<void*,std::queue<MPI_Request*>>(buffer, std::queue<MPI_Request*>()));
-
-		std::queue<MPI_Request*> requestQ = _impl->_requests.find(buffer)->second;
+		std::queue< MPI_Request* > * requestQ = new std::queue< MPI_Request* >();
+		_impl->_requests.insert(std::pair< void*, std::queue< MPI_Request* > *>(buffer, requestQ));
 		MPI_Request * request = new MPI_Request;
-		requestQ.push(request);
-
-		std::cout<<requestQ.size()<<std::endl;
 
 		if (MPI_SUCCESS != MPI_Irecv(buffer, bytes, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD, request))
 		{
-			LBWARN << "Read error" << lunchbox::sysError << std::endl;
+			LBWARN << "Read error" << lunchbox::sysError << ", closing connection" << std::endl;
 			close();
 		}
+
+		requestQ->push(request);
 	}
 	else
 	{
+		std::queue< MPI_Request* > * requestQ = new std::queue< MPI_Request* >();
+		_impl->_requests.insert(std::pair< void*, std::queue< MPI_Request* > *>(buffer, requestQ));
+
+		uint64_t offset = 0;
+		while(1)
+		{
+			uint64_t dim = offset + MAX_SIZE_MSG >= bytes ? bytes - offset : MAX_SIZE_MSG;
+
+			LBASSERT( dim <= MAX_SIZE_MSG );
+
+			MPI_Request * request = new MPI_Request;
+
+			if (MPI_SUCCESS != MPI_Irecv((char*)buffer + offset, dim, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD, request))
+			{
+				LBWARN << "Read error" << lunchbox::sysError << ", closing connection" << std::endl;
+				close();
+			}
+
+			requestQ->push(request);
+
+			offset += dim;
+
+			if (offset >= bytes)
+				break;
+		}
 	}
 }
 
@@ -416,45 +444,87 @@ int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
     if( !isConnected())
         return -1;
 
+	int64_t rBytes = 0;
+
 	if ( bytes <= MAX_SIZE_MSG)
 	{
-		std::map<void*,std::queue<MPI_Request*>>::iterator it = _impl->_requests.find(buffer);
+		std::map< void*,std::queue<MPI_Request*>* >::iterator it = _impl->_requests.find(buffer);
 
 		LBASSERT( it != _impl->_requests.end() )
 
-		std::queue<MPI_Request*> requestQ = it->second;
+		std::queue<MPI_Request*> * requestQ = it->second;
 
-		std::cout<<requestQ.size()<<std::endl;
+		LBASSERT( requestQ->size() == 1 );
 
-		LBASSERT( requestQ.size() == 1 );
+		MPI_Request * request = requestQ->front();
 
-		MPI_Request * request = requestQ.front();
+		rBytes =  _readSync(request);
 
-		const int64_t read =  _readSync(request);
+		if (rBytes < 0)
+		{
+			LBWARN << "Read error" << lunchbox::sysError << ", closing connection" << std::endl;
+			close();
+		}
+		else
+		{
+			requestQ->pop();
 
-		delete request;
+			delete request;
 
-		_impl->_requests.erase(it);
+			delete requestQ;
 
-		return read;
+			_impl->_requests.erase(it);
+		}
 	}
 	else
 	{
-		return 0;
+		std::map< void*,std::queue<MPI_Request*>* >::iterator it = _impl->_requests.find(buffer);
+
+		LBASSERT( it != _impl->_requests.end() )
+
+		std::queue<MPI_Request*> * requestQ = it->second;
+
+		LBASSERT( requestQ->size() > 1 );
+
+		while(requestQ->size() > 0)
+		{
+			MPI_Request * request = requestQ->front();
+
+			int64_t pRead =  _readSync(request);
+
+			if (pRead < 0)
+			{
+				LBWARN << "Read error" << lunchbox::sysError << ", closing connection" << std::endl;
+				close();
+				return -1;
+			}
+			else
+			{
+				rBytes += pRead;
+			
+				requestQ->pop();
+
+				delete request;
+			}
+		}
+
+		delete requestQ;
+
+		_impl->_requests.erase(it);
 	}
+
+	return rBytes;
 }
 
-bool MPIConnection::_write(const void* buffer, const uint64_t size)
+int64_t MPIConnection::_write(const void* buffer, const uint64_t size)
 {
 	if (MPI_SUCCESS != MPI_Ssend((void*)buffer, size, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD)) 
 	//if (MPI_SUCCESS != MPI_Send((void*)((unsigned char*)buffer + offset), dim, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD)) 
 	{
-		LBWARN << "Write error" << lunchbox::sysError << std::endl;
-		close();
-		return false;
+		return -1;
 	}
 
-	return true;
+	return size;
 }
 
 int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
@@ -462,40 +532,40 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
     if( !isConnected())
         return -1;
 
+	int64_t wBytes = 0;
+
 	if ( bytes <= MAX_SIZE_MSG)
 	{
-		if ( !_write(buffer, bytes) )
+		wBytes = _write(buffer, bytes);
+
+		if (wBytes < 0)
 		{
-			LBWARN << "Write error" << lunchbox::sysError << std::endl;
+			LBWARN << "Write error" << lunchbox::sysError << ", closing connection" << std::endl;
 			close();
-			return -1;
 		}
 	}
 	else
 	{
-		#if 0
-		uint64_t offset = 0;
 		while(1)
 		{
-			uint64_t dim = offset + MAX_SIZE_MSG >= offset ? bytes - offset : MAX_SIZE_MSG;
+			uint64_t dim = wBytes + MAX_SIZE_MSG >= (int64_t)bytes ? bytes - wBytes : MAX_SIZE_MSG;
 
-			if ( !_write((const void*)((unsigned char*)buffer + offset), dim) )
+			const int64_t pWrite =  _write((const void*)((unsigned char*)buffer + wBytes), dim);
+			if (pWrite < 0) 
 			{
-				LBWARN << "Write error" << lunchbox::sysError << std::endl;
+				LBWARN << "Write error" << lunchbox::sysError << ", closing connection" << std::endl;
 				close();
 				return -1;
 			}
 
-			offset += dim;
+			wBytes += pWrite;
 
-			if (offset >= bytes)
+			if (wBytes >= (int64_t)bytes)
 				break;
 		}
-		#endif
-		return 0;
 	}
 
-	return bytes;
+	return wBytes;
 }
 
 }

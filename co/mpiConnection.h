@@ -63,7 +63,7 @@ class MPIConnection : public Connection
 		
 		detail::MPIConnection * const _impl;
 	
-		bool _write(const void* buffer, const uint64_t size);	
+		int64_t _write(const void* buffer, const uint64_t size);	
 		int64_t _readSync(MPI_Request * request);	
 };
 
