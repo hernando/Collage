@@ -165,6 +165,14 @@ bool ConnectionDescription::fromString( std::string& data )
 
         filename = data.substr( 0, nextPos );
         data = data.substr( nextPos + 1 );
+
+        nextPos = data.find( SEPARATOR );
+        if( nextPos == std::string::npos )
+            goto error;
+
+        const std::string rankStr = data.substr( 0, nextPos );
+        data                 = data.substr( nextPos + 1 );
+        rank                 = atoi( rankStr.c_str( ));
     }
     return true;
 
