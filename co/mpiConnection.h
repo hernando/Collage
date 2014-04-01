@@ -32,7 +32,18 @@ namespace co
 {
 namespace detail { class MPIConnection; } 
 
-/** MPI connection  */
+/** MPI connection
+
+	Allows peer-to-peer connections if the MPI runtime environment has
+	been set correctly.
+
+	Due to Collage is a multithreaded library, MPI connections 
+	requiere at least MPI_THREAD_SERIALIZED level of thread support.
+	During the initialization Collage will request the appropriate 
+	thread support but if the MPI library does not provide it, MPI 
+	connections will be disabled. If the application uses a MPI 
+	connection when disabled, the library will abort.
+	*/
 class MPIConnection : public Connection
 {
     public:

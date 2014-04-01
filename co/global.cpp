@@ -212,4 +212,19 @@ size_t Global::getCommandQueueLimit()
     return std::numeric_limits< size_t >::max();
 }
 
+#ifdef COLLAGE_USE_MPI
+
+bool _mpiAllowed = false;
+
+void Global::allowMPI()
+{
+	_mpiAllowed = true;
+}
+
+bool Global::isMPIAllowed()
+{
+	return _mpiAllowed;
+}
+
+#endif
 }

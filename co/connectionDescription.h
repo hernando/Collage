@@ -41,7 +41,7 @@ namespace co
         /** The listening port (TCPIP, SDP, IB, MCIP, RDMA). @version 1.0 */
         uint16_t port;
 
-		/** The rank (MPI). @version 1.2 */
+		/** The rank (MPI). @version 1.X */
 		int32_t rank;
 
         /** The hostname to bind or connect to. @version 1.0 */

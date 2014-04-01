@@ -36,6 +36,14 @@ namespace co
         /** @return the default listening port. @version 1.0 */
         CO_API static uint16_t getDefaultPort();
 
+		#ifdef COLLAGE_USE_MPI
+		/** Set MPI communications allowed @version 1.X */
+		CO_API static void allowMPI();
+
+		/** @return true if MPI communications are allowed, false otherwise @version 1.X */
+		CO_API static bool isMPIAllowed();
+		#endif
+
         /**
          * Set the minimum buffer size for Object serialization.
          *
