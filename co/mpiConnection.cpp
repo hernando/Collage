@@ -99,30 +99,30 @@ namespace detail
 	{
 		public:
 			MPIConnection() : 
-							  _rank( -1 )
-							, _peerRank( -1 )
-							, _tag( -1 )
-							, _asyncConnection( 0 )
+							  rank( -1 )
+							, peerRank( -1 )
+							, tag( -1 )
+							, asyncConnection( 0 )
 			{
 				// Ask rank of the process
-				if ( MPI_SUCCESS != MPI_Comm_rank( MPI_COMM_WORLD, &_rank ) )
+				if ( MPI_SUCCESS != MPI_Comm_rank( MPI_COMM_WORLD, &rank ) )
 				{
 					LBERROR << "Could not determine the rank of the calling process in the communicator: MPI_COMM_WORLD" << std::endl;
 				}
 
-				LBASSERT( _rank >= 0 );
+				LBASSERT( rank >= 0 );
 			}
 
-			int32_t		_rank;
-			int32_t		_peerRank;
-			int16_t		_tag;
+			int32_t		rank;
+			int32_t		peerRank;
+			int16_t		tag;
 
 			// Tags 
-			std::set< int16_t >	_tags;
+			std::set< int16_t >	tags;
 
-			std::map< void *, std::queue< MPI_Request* >* >	_requests;
+			std::map< void *, std::queue< MPI_Request* >* >	requests;
 
-			AsyncConnection *				_asyncConnection;
+			AsyncConnection *				asyncConnection;
 	};
 
 	/** Due to accept a new connection when listenting is an asynchronous process, this class
@@ -162,19 +162,19 @@ namespace detail
 				}
 				delete _request;
 
-				LBASSERT( _detail->_peerRank >= 0 );
+				LBASSERT( _detail->peerRank >= 0 );
 
 				int16_t cTag = tagManager.getTag( );
 
 				// Send Tag ( int16_t = 2 bytes )
-				if ( MPI_SUCCESS != MPI_Send( &cTag, 2, MPI_BYTE, _detail->_peerRank, _tag, MPI_COMM_WORLD ) )
+				if ( MPI_SUCCESS != MPI_Send( &cTag, 2, MPI_BYTE, _detail->peerRank, _tag, MPI_COMM_WORLD ) )
 				{
 					LBWARN << "Error sending MPI tag to peer in a MPI connection."<< std::endl;
 					_status = false;
 					return;
 				}
 
-				_detail->_tag = cTag;
+				_detail->tag = cTag;
 
 				_status = true;
 			}
@@ -217,8 +217,8 @@ MPIConnection::~MPIConnection()
 {
 	close( );
 
-	if ( _impl->_asyncConnection != 0 )
-		delete _impl->_asyncConnection;
+	if ( _impl->asyncConnection != 0 )
+		delete _impl->asyncConnection;
 	
 	delete _impl;
 }
@@ -233,22 +233,22 @@ bool MPIConnection::connect()
     _setState( STATE_CONNECTING );
 
 	ConnectionDescriptionPtr description = _getDescription( );
-	_impl->_peerRank = description->rank;
+	_impl->peerRank = description->rank;
 	int16_t cTag = description->port;
 
 	// To connect first send the rank
-	if ( MPI_SUCCESS != MPI_Ssend( &_impl->_rank, 1, MPI_INT, _impl->_peerRank, cTag, MPI_COMM_WORLD ) )
+	if ( MPI_SUCCESS != MPI_Ssend( &_impl->rank, 1, MPI_INT, _impl->peerRank, cTag, MPI_COMM_WORLD ) )
 	{
-		LBWARN << "Could not connect to "<< _impl->_peerRank << " process." << std::endl;
+		LBWARN << "Could not connect to "<< _impl->peerRank << " process." << std::endl;
 		return false;
 	}
 
 	int16_t tag = -1;
 
 	// If the listener receive the rank, he should send the MPI tag used for the communication.
-	if ( MPI_SUCCESS != MPI_Recv( &tag, 2, MPI_BYTE, _impl->_peerRank, cTag, MPI_COMM_WORLD, NULL ) )
+	if ( MPI_SUCCESS != MPI_Recv( &tag, 2, MPI_BYTE, _impl->peerRank, cTag, MPI_COMM_WORLD, NULL ) )
 	{
-		LBWARN << "Could not receive MPI tag from "<< _impl->_peerRank << " process." << std::endl;
+		LBWARN << "Could not receive MPI tag from "<< _impl->peerRank << " process." << std::endl;
 		return false;
 	}
 
@@ -256,11 +256,11 @@ bool MPIConnection::connect()
 	LBASSERT( tag > 0 );
 
 	// set a default tag
-	_impl->_tag = tag;
+	_impl->tag = tag;
 
     _setState( STATE_CONNECTED );
 
-    LBINFO << "Connected with rank " << _impl->_peerRank << " on tag "<< _impl->_tag << std::endl;
+    LBINFO << "Connected with rank " << _impl->peerRank << " on tag "<< _impl->tag << std::endl;
 
 	return true;
 }
@@ -282,9 +282,9 @@ bool MPIConnection::listen()
 	}
 
 	// Set tag for listening
-	_impl->_tag = tag;
+	_impl->tag = tag;
 
-	LBINFO << "MPI Connection, rank " << _impl->_rank << " listening on tag " << _impl->_tag << std::endl;
+	LBINFO << "MPI Connection, rank " << _impl->rank << " listening on tag " << _impl->tag << std::endl;
 
     _setState( STATE_LISTENING );
 
@@ -298,12 +298,12 @@ void MPIConnection::close()
 
 	// Deregister tags
 	std::set< int16_t >::iterator it;
-	for ( it = _impl->_tags.begin( ); it != _impl->_tags.end( ); ++it )
+	for ( it = _impl->tags.begin( ); it != _impl->tags.end( ); ++it )
 		tagManager.deregisterTag( *it );
 
 	// Cancel and delete requests
-	std::map< void*, std::queue<MPI_Request*>* >::iterator itR = _impl->_requests.begin( );
-	while( itR != _impl->_requests.end( ) )
+	std::map< void*, std::queue<MPI_Request*>* >::iterator itR = _impl->requests.begin( );
+	while( itR != _impl->requests.end( ) )
 	{
 		std::queue< MPI_Request* > * queue = itR->second;	
 		while( queue->size( ) > 0 )
@@ -324,25 +324,25 @@ void MPIConnection::close()
 void MPIConnection::acceptNB()
 {
 	// Ensure tag is register
-	LBASSERT( _impl->_tag != -1 );
+	LBASSERT( _impl->tag != -1 );
 
 	// Avoid multiple accepting process at the same time
 	// To start a new accept process first call acceptSync to finish the last one.
-	LBASSERT( _impl->_asyncConnection == 0 )
+	LBASSERT( _impl->asyncConnection == 0 )
 
 	MPI_Request * request = new MPI_Request;
 
 	detail::MPIConnection * newImpl = new detail::MPIConnection( );
 
 	// Recieve the peer rank
-	if ( MPI_SUCCESS != MPI_Irecv( &newImpl->_peerRank, 1, MPI_INT, MPI_ANY_SOURCE, _impl->_tag, MPI_COMM_WORLD, request ) )
+	if ( MPI_SUCCESS != MPI_Irecv( &newImpl->peerRank, 1, MPI_INT, MPI_ANY_SOURCE, _impl->tag, MPI_COMM_WORLD, request ) )
 	{
 		LBWARN << "Could not start accepting a MPI connection, closing connection." << std::endl;
 		close( );
 		return;
 	}
 
-	_impl->_asyncConnection = new detail::AsyncConnection( newImpl, request, _impl->_tag );
+	_impl->asyncConnection = new detail::AsyncConnection( newImpl, request, _impl->tag );
 }
 
 ConnectionPtr MPIConnection::acceptSync()
@@ -350,24 +350,24 @@ ConnectionPtr MPIConnection::acceptSync()
     if( !isListening( ))
         return 0;
 	
-	LBASSERT( _impl->_asyncConnection != 0 )
+	LBASSERT( _impl->asyncConnection != 0 )
 
-	if ( !_impl->_asyncConnection->wait( ) )
+	if ( !_impl->asyncConnection->wait( ) )
 	{
 		LBWARN << "Error accepting a MPI connection, closing connection." << std::endl;
 		close( );
 		return 0;
 	}
 	
-	detail::MPIConnection * newImpl = _impl->_asyncConnection->getImpl( );
+	detail::MPIConnection * newImpl = _impl->asyncConnection->getImpl( );
 	
-	delete _impl->_asyncConnection;
-	_impl->_asyncConnection = 0;
+	delete _impl->asyncConnection;
+	_impl->asyncConnection = 0;
 
     MPIConnection* newConnection = new MPIConnection( newImpl );
     newConnection->_setState( STATE_CONNECTED );
 
-    LBINFO << "Accepted to rank " << newImpl->_peerRank << " on tag " << newImpl->_tag << std::endl;
+    LBINFO << "Accepted to rank " << newImpl->peerRank << " on tag " << newImpl->tag << std::endl;
 
 	return newConnection;
 }
@@ -392,7 +392,7 @@ int64_t MPIConnection::_readSync(MPI_Request * request)
 		boost::this_thread::sleep( boost::posix_time::milliseconds( timeouts * TIMEOUT ) );
 	}
 
-	if ( !flag || status.MPI_TAG != _impl->_tag)
+	if ( !flag || status.MPI_TAG != _impl->tag)
 	{
 		return -1;
 	}
@@ -414,10 +414,10 @@ void MPIConnection::readNB( void* buffer, const uint64_t bytes )
 	if ( bytes <= MAX_SIZE_MSG )
 	{
 		std::queue< MPI_Request* > * requestQ = new std::queue< MPI_Request* >( );
-		_impl->_requests.insert( std::pair< void*, std::queue< MPI_Request* > *>( buffer, requestQ ) );
+		_impl->requests.insert( std::pair< void*, std::queue< MPI_Request* > *>( buffer, requestQ ) );
 		MPI_Request * request = new MPI_Request;
 
-		if ( MPI_SUCCESS != MPI_Irecv( buffer, bytes, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD, request ) )
+		if ( MPI_SUCCESS != MPI_Irecv( buffer, bytes, MPI_BYTE, _impl->peerRank, _impl->tag, MPI_COMM_WORLD, request ) )
 		{
 			LBWARN << "Read error, closing connection" << std::endl;
 			close( );
@@ -428,7 +428,7 @@ void MPIConnection::readNB( void* buffer, const uint64_t bytes )
 	else
 	{
 		std::queue< MPI_Request* > * requestQ = new std::queue< MPI_Request* >( );
-		_impl->_requests.insert( std::pair< void*, std::queue< MPI_Request* > *>( buffer, requestQ ) );
+		_impl->requests.insert( std::pair< void*, std::queue< MPI_Request* > *>( buffer, requestQ ) );
 
 		uint64_t offset = 0;
 		while( 1 )
@@ -439,7 +439,7 @@ void MPIConnection::readNB( void* buffer, const uint64_t bytes )
 
 			MPI_Request * request = new MPI_Request;
 
-			if ( MPI_SUCCESS != MPI_Irecv( (char*)buffer + offset, dim, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD, request ) )
+			if ( MPI_SUCCESS != MPI_Irecv( (char*)buffer + offset, dim, MPI_BYTE, _impl->peerRank, _impl->tag, MPI_COMM_WORLD, request ) )
 			{
 				LBWARN << "Read error, closing connection" << std::endl;
 				close( );
@@ -462,9 +462,9 @@ int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
 
 	int64_t rBytes = 0;
 
-	std::map< void*,std::queue<MPI_Request*>* >::iterator it = _impl->_requests.find( buffer );
+	std::map< void*,std::queue<MPI_Request*>* >::iterator it = _impl->requests.find( buffer );
 
-	LBASSERT( it != _impl->_requests.end( ) )
+	LBASSERT( it != _impl->requests.end( ) )
 
 	std::queue<MPI_Request*> * requestQ = it->second;
 
@@ -518,15 +518,15 @@ int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
 
 	delete requestQ;
 
-	_impl->_requests.erase( it );
+	_impl->requests.erase( it );
 
 	return rBytes;
 }
 
 int64_t MPIConnection::_write(const void* buffer, const uint64_t size)
 {
-	if ( MPI_SUCCESS != MPI_Ssend( (void*)buffer, size, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD ) ) 
-	//if (MPI_SUCCESS != MPI_Send((void*)((unsigned char*)buffer + offset), dim, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD)) 
+	if ( MPI_SUCCESS != MPI_Ssend( (void*)buffer, size, MPI_BYTE, _impl->peerRank, _impl->tag, MPI_COMM_WORLD ) ) 
+	//if (MPI_SUCCESS != MPI_Send((void*)((unsigned char*)buffer + offset), dim, MPI_BYTE, _impl->peerRank, _impl->tag, MPI_COMM_WORLD)) 
 	{
 		return -1;
 	}
