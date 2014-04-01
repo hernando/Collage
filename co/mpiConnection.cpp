@@ -156,7 +156,7 @@ namespace detail
 			{
 				if ( MPI_SUCCESS != MPI_Wait( _request, NULL ) )
 				{
-					LBERROR << "Error waiting for peer rank in a MPI connection." << std::endl;
+					LBWARN << "Error waiting for peer rank in a MPI connection." << std::endl;
 					_status = false;
 					return;
 				}
@@ -169,7 +169,7 @@ namespace detail
 				// Send Tag ( int16_t = 2 bytes )
 				if ( MPI_SUCCESS != MPI_Send( &cTag, 2, MPI_BYTE, _detail->_peerRank, _tag, MPI_COMM_WORLD ) )
 				{
-					LBERROR << "Error sending name port to peer in a MPI connection."<< std::endl;
+					LBWARN << "Error sending MPI tag to peer in a MPI connection."<< std::endl;
 					_status = false;
 					return;
 				}
@@ -237,9 +237,9 @@ bool MPIConnection::connect()
 	int16_t cTag = description->port;
 
 	// To connect first send the rank
-	if ( MPI_SUCCESS != MPI_Send( &_impl->_rank, 1, MPI_INT, _impl->_peerRank, cTag, MPI_COMM_WORLD ) )
+	if ( MPI_SUCCESS != MPI_Ssend( &_impl->_rank, 1, MPI_INT, _impl->_peerRank, cTag, MPI_COMM_WORLD ) )
 	{
-		LBERROR << "Could not connect to "<< _impl->_peerRank << " process." << std::endl;
+		LBWARN << "Could not connect to "<< _impl->_peerRank << " process." << std::endl;
 		return false;
 	}
 
@@ -248,7 +248,7 @@ bool MPIConnection::connect()
 	// If the listener receive the rank, he should send the MPI tag used for the communication.
 	if ( MPI_SUCCESS != MPI_Recv( &tag, 2, MPI_BYTE, _impl->_peerRank, cTag, MPI_COMM_WORLD, NULL ) )
 	{
-		LBERROR << "Could not receive name port from "<< _impl->_peerRank << " process." << std::endl;
+		LBWARN << "Could not receive MPI tag from "<< _impl->_peerRank << " process." << std::endl;
 		return false;
 	}
 
@@ -275,7 +275,7 @@ bool MPIConnection::listen()
 	// Register tag
 	if ( !tagManager.registerTag( tag ) )
 	{
-		LBERROR << "Tag " << tag << " is already register." << std::endl;
+		LBWARN << "Tag " << tag << " is already register." << std::endl;
 		if ( isListening( ) )
 			LBINFO << "Probably, listen has already called before." << std::endl;
 		return false;
@@ -337,8 +337,7 @@ void MPIConnection::acceptNB()
 	// Recieve the peer rank
 	if ( MPI_SUCCESS != MPI_Irecv( &newImpl->_peerRank, 1, MPI_INT, MPI_ANY_SOURCE, _impl->_tag, MPI_COMM_WORLD, request ) )
 	{
-		LBERROR << "Could not start accepting a MPI connection." << std::endl;
-        LBWARN << "Got " << lunchbox::sysError << ", closing connection" << std::endl;
+		LBWARN << "Could not start accepting a MPI connection, closing connection." << std::endl;
 		close( );
 		return;
 	}
@@ -355,8 +354,7 @@ ConnectionPtr MPIConnection::acceptSync()
 
 	if ( !_impl->_asyncConnection->wait( ) )
 	{
-		LBERROR << "Error accepting a MPI connection." << std::endl;
-        LBWARN << "Got " << lunchbox::sysError << ", closing connection" << std::endl;
+		LBWARN << "Error accepting a MPI connection, closing connection." << std::endl;
 		close( );
 		return 0;
 	}
@@ -421,7 +419,7 @@ void MPIConnection::readNB( void* buffer, const uint64_t bytes )
 
 		if ( MPI_SUCCESS != MPI_Irecv( buffer, bytes, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD, request ) )
 		{
-			LBWARN << "Read error" << lunchbox::sysError << ", closing connection" << std::endl;
+			LBWARN << "Read error, closing connection" << std::endl;
 			close( );
 		}
 
@@ -443,7 +441,7 @@ void MPIConnection::readNB( void* buffer, const uint64_t bytes )
 
 			if ( MPI_SUCCESS != MPI_Irecv( (char*)buffer + offset, dim, MPI_BYTE, _impl->_peerRank, _impl->_tag, MPI_COMM_WORLD, request ) )
 			{
-				LBWARN << "Read error" << lunchbox::sysError << ", closing connection" << std::endl;
+				LBWARN << "Read error, closing connection" << std::endl;
 				close( );
 			}
 
@@ -480,7 +478,7 @@ int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
 
 		if ( rBytes < 0 )
 		{
-			LBWARN << "Read error" << lunchbox::sysError << ", closing connection" << std::endl;
+			LBWARN << "Read error, closing connection" << std::endl;
 			close( );
 			return -1;
 		}
@@ -503,7 +501,7 @@ int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
 
 			if ( pRead < 0 )
 			{
-				LBWARN << "Read error" << lunchbox::sysError << ", closing connection" << std::endl;
+				LBWARN << "Read error, closing connection" << std::endl;
 				close( );
 				return -1;
 			}
@@ -549,7 +547,7 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
 
 		if ( wBytes < 0 )
 		{
-			LBWARN << "Write error" << lunchbox::sysError << ", closing connection" << std::endl;
+			LBWARN << "Write error, closing connection" << std::endl;
 			close( );
 			return -1;
 		}
@@ -563,7 +561,7 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
 			const int64_t pWrite =  _write((const void*)((unsigned char*)buffer + wBytes), dim);
 			if ( pWrite < 0 ) 
 			{
-				LBWARN << "Write error" << lunchbox::sysError << ", closing connection" << std::endl;
+				LBWARN << "Write error, closing connection" << std::endl;
 				close();
 				return -1;
 			}
