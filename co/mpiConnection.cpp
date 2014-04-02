@@ -323,6 +323,8 @@ void MPIConnection::close()
 
 void MPIConnection::acceptNB()
 {
+    LBASSERT( isListening( ));
+
 	// Ensure tag is register
 	LBASSERT( _impl->tag != -1 );
 
