@@ -374,13 +374,13 @@ ConnectionPtr MPIConnection::acceptSync()
 
 int64_t MPIConnection::_readSync(MPI_Request * request)
 {
-	unsigned int timeouts = MAX_TIMEOUTS;
+	unsigned int timeouts = 0;
 	int flag = 0;
 	MPI_Status status;
 
-	while( timeouts )
+	while( timeouts < MAX_TIMEOUTS)
 	{
-		if ( MPI_SUCCESS != MPI_Test(request, &flag, &status ) )
+		if ( MPI_SUCCESS != MPI_Test( request, &flag, &status ) )
 		{
 			return -1;
 		}
@@ -388,11 +388,14 @@ int64_t MPIConnection::_readSync(MPI_Request * request)
 		if ( flag )
 			break;
 
-		timeouts--;
-		boost::this_thread::sleep( boost::posix_time::milliseconds( timeouts * TIMEOUT ) );
+		timeouts++;
+		// Lineal timeout
+		boost::this_thread::sleep( boost::posix_time::milliseconds( TIMEOUT ) );
+		// Graduated time-out
+		//boost::this_thread::sleep( boost::posix_time::milisencods( timeouts * TIMEOUT ) );
 	}
 
-	if ( !flag || status.MPI_TAG != _impl->tag)
+	if ( !flag || status.MPI_TAG != _impl->tag || timeouts  == MAX_TIMEOUTS )
 	{
 		return -1;
 	}
@@ -525,8 +528,7 @@ int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
 
 int64_t MPIConnection::_write(const void* buffer, const uint64_t size)
 {
-	if ( MPI_SUCCESS != MPI_Ssend( (void*)buffer, size, MPI_BYTE, _impl->peerRank, _impl->tag, MPI_COMM_WORLD ) ) 
-	//if (MPI_SUCCESS != MPI_Send((void*)((unsigned char*)buffer + offset), dim, MPI_BYTE, _impl->peerRank, _impl->tag, MPI_COMM_WORLD)) 
+	if ( MPI_SUCCESS != MPI_Send( (void*)buffer, size, MPI_BYTE, _impl->peerRank, _impl->tag, MPI_COMM_WORLD ) ) 
 	{
 		return -1;
 	}
