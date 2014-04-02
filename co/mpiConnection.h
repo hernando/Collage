@@ -76,6 +76,7 @@ class MPIConnection : public Connection
 	
 		int64_t _write(const void* buffer, const uint64_t size);	
 		int64_t _readSync(MPI_Request * request);	
+		int _getTimeOut();
 };
 
 }

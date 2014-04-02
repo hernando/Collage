@@ -223,6 +223,12 @@ MPIConnection::~MPIConnection()
 	delete _impl;
 }
 
+int MPIConnection::_getTimeOut()
+{
+    const uint32_t timeout = Global::getTimeout();
+    return timeout == LB_TIMEOUT_INDEFINITE ? -1 : int( timeout );
+}
+
 bool MPIConnection::connect()
 {
     LBASSERT( getDescription( )->type == CONNECTIONTYPE_MPI );
@@ -380,7 +386,9 @@ int64_t MPIConnection::_readSync(MPI_Request * request)
 	int flag = 0;
 	MPI_Status status;
 
-	while( timeouts < MAX_TIMEOUTS)
+	int timeout	= _getTimeOut( );
+
+	while( timeout > 0 )
 	{
 		if ( MPI_SUCCESS != MPI_Test( request, &flag, &status ) )
 		{
@@ -391,13 +399,11 @@ int64_t MPIConnection::_readSync(MPI_Request * request)
 			break;
 
 		timeouts++;
-		// Lineal timeout
-		boost::this_thread::sleep( boost::posix_time::milliseconds( TIMEOUT ) );
-		// Graduated time-out
-		//boost::this_thread::sleep( boost::posix_time::milisencods( timeouts * TIMEOUT ) );
+		timeout -= timeouts * TIMEOUT;
+		boost::this_thread::sleep( boost::posix_time::milliseconds( timeouts * TIMEOUT ) );
 	}
 
-	if ( !flag || status.MPI_TAG != _impl->tag || timeouts  == MAX_TIMEOUTS )
+	if ( !flag || status.MPI_TAG != _impl->tag || timeout  < 0 )
 	{
 		return -1;
 	}
