@@ -30,20 +30,19 @@
 
 namespace co
 {
-namespace detail { class MPIConnection; } 
+namespace detail { class MPIConnection; }
 
-/** MPI connection
-
-	Allows peer-to-peer connections if the MPI runtime environment has
-	been set correctly.
-
-	Due to Collage is a multithreaded library, MPI connections 
-	requiere at least MPI_THREAD_SERIALIZED level of thread support.
-	During the initialization Collage will request the appropriate 
-	thread support but if the MPI library does not provide it, MPI 
-	connections will be disabled. If the application uses a MPI 
-	connection when disabled, the library will abort.
-	*/
+/* MPI connection
+ * Allows peer-to-peer connections if the MPI runtime environment has
+ * been set correctly.
+ *
+ * Due to Collage is a multithreaded library, MPI connections
+ * requiere at least MPI_THREAD_SERIALIZED level of thread support.
+ * During the initialization Collage will request the appropriate
+ * thread support but if the MPI library does not provide it, MPI
+ * connections will be disabled. If the application uses a MPI
+ * connection when disabled, the library will abort.
+ */
 class MPIConnection : public Connection
 {
     public:
@@ -56,25 +55,24 @@ class MPIConnection : public Connection
         CO_API ~MPIConnection();
 
         virtual bool connect();
-		virtual bool listen();
+        virtual bool listen();
         virtual void close();
 
-		virtual void acceptNB();
-		virtual ConnectionPtr acceptSync();
+        virtual void acceptNB();
+        virtual ConnectionPtr acceptSync();
 
-		virtual Notifier getNotifier() const { return _notifier; }
+        virtual Notifier getNotifier() const { return _notifier; }
 
     protected:
-		void readNB( void* buffer, const uint64_t bytes );
-		int64_t readSync( void* buffer, const uint64_t bytes, const bool ignored);
-		int64_t write( const void* buffer, const uint64_t bytes );
+        void readNB( void* , const uint64_t ) override { /* NOP */ }
+        int64_t readSync( void* buffer, const uint64_t bytes, const bool ignored);
+        int64_t write( const void* buffer, const uint64_t bytes );
 
-	private:
-		Notifier	_notifier;
-		
-		detail::MPIConnection * const _impl;
+    private:
+        Notifier                            _notifier;
+        detail::MPIConnection * const       _impl;
 
-		void	_close(const bool userClose);
+        void _close( const bool userClose );
 };
 
 }

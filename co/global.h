@@ -37,10 +37,10 @@ namespace co
         CO_API static uint16_t getDefaultPort();
 
 		#ifdef COLLAGE_USE_MPI
-		/** Set MPI communications allowed @version 1.X */
+		/** Set MPI communications allowed @version 1.2 */
 		CO_API static void allowMPI();
 
-		/** @return true if MPI communications are allowed, false otherwise @version 1.X */
+		/** @return true if MPI communications are allowed, false otherwise @version 1.2 */
 		CO_API static bool isMPIAllowed();
 		#endif
 

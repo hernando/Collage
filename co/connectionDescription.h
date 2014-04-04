@@ -38,10 +38,10 @@ namespace co
         /** The bandwidth in kilobyte per second. @version 1.0 */
         int32_t bandwidth;
 
-        /** The listening port (TCPIP, SDP, IB, MCIP, RDMA). @version 1.0 */
+        /** The listening port (TCPIP, SDP, IB, MCIP, RDMA, MPI). @version 1.0 */
         uint16_t port;
 
-		/** The rank (MPI). @version 1.X */
+		/** The rank (MPI). @version 1.2 */
 		int32_t rank;
 
         /** The hostname to bind or connect to. @version 1.0 */
