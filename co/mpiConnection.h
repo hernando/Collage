@@ -73,6 +73,8 @@ class MPIConnection : public Connection
 		Notifier	_notifier;
 		
 		detail::MPIConnection * const _impl;
+
+		void	_close(const bool userClose);
 };
 
 }

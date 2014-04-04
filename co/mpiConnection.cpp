@@ -93,7 +93,7 @@ namespace
 			Dispatcher(int32_t source, int16_t tag) :
 													_source( source )
 												,	_tag( tag )
-												,	_isStopped( false )
+												,	_isStopped( true )
 												,	_totalBytes( 0 )
 			{
 				start();
@@ -102,6 +102,9 @@ namespace
 			void run()
 			{
 				_control.lock();
+				_isStopped = false;
+				_control.signal();
+
 				while( !_isStopped )
 				{
 					// Wait for new petitions
@@ -178,6 +181,11 @@ namespace
 				if ( _totalBytes == 0 )
 				{
 					_control.lock();
+					if ( _isStopped  && !_control.timedWait( co::Global::getTimeout() ) )
+					{
+						_buffer.unlock();
+						return -1;
+					}
 					_control.signal();
 					_control.unlock();
 
@@ -409,7 +417,7 @@ MPIConnection::MPIConnection(detail::MPIConnection * impl) :
 
 MPIConnection::~MPIConnection()
 {
-	close( );
+	_close( false );
 
 	if ( _impl->asyncConnection != 0 )
 		delete _impl->asyncConnection;
@@ -496,6 +504,11 @@ bool MPIConnection::listen()
 
 void MPIConnection::close()
 {
+	_close(true);
+}
+
+void MPIConnection::_close(const bool userClose)
+{
     if( isClosed( ))
         return;
 
@@ -503,11 +516,14 @@ void MPIConnection::close()
 	
 	if ( _impl->dispatcher != 0 )
 	{
-		// Send remote connetion EOF and close dispatcher
-		unsigned char eof = 0xFF;
-		if ( MPI_SUCCESS != MPI_Send( &eof, 1, MPI_BYTE, _impl->peerRank, _impl->tagSend, MPI_COMM_WORLD ) )
+		if ( userClose )
 		{
-			LBWARN << "Error sending eof to remote " << std::endl;
+			// Send remote connetion EOF and close dispatcher
+			unsigned char eof = 0xFF;
+			if ( MPI_SUCCESS != MPI_Send( &eof, 1, MPI_BYTE, _impl->peerRank, _impl->tagSend, MPI_COMM_WORLD ) )
+			{
+				LBWARN << "Error sending eof to remote " << std::endl;
+			}
 		}
 		
 		// Close Dispacher
