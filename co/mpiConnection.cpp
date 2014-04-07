@@ -146,12 +146,12 @@ void run()
 
         LBASSERT( bytes >= 0 );
 
-        unsigned char b[bytes];
+        unsigned char buffer[bytes];
 
         /* Receive the message, this call is not blocking due to the
          * previous MPI_Probe call.
          */
-        if( MPI_SUCCESS != MPI_Recv( &b, bytes, MPI_BYTE, _source, _tag, 
+        if( MPI_SUCCESS != MPI_Recv( buffer, bytes, MPI_BYTE, _source, _tag, 
                                         MPI_COMM_WORLD, MPI_STATUS_IGNORE ) )
         {
             LBERROR << "Error retrieving messages " << std::endl;
@@ -162,7 +162,7 @@ void run()
         /* If the peer performed a close operation a EOF is sent to indicate 
          * that connection should be close.
          */
-        if( bytes == 1 && b[0] == 0xFF )
+        if( bytes == 1 && buffer[0] == 0xFF )
         {
             LBINFO << "Received EOF, closing connection" << std::endl;
             _isStopped = true;
@@ -236,6 +236,7 @@ int64_t readSync(const void * /*buffer*/, int64_t bytes)
         r = _totalBytes;
         _totalBytes = 0;
     }
+
     _buffer.unlock();
 
     return r;
@@ -322,6 +323,10 @@ public:
 /* Due to accept a new connection when listenting is
  * an asynchronous process, this class perform the
  * accepting process in a different thread.
+ * 
+ * Note:
+ * Race condition can occur on request and status.
+ * Fix it.
  */
 class AsyncConnection : lunchbox::Thread
 {
@@ -330,7 +335,7 @@ public:
 AsyncConnection(MPIConnection * detail, int32_t tag) :
       _detail( detail )
     , _tag( tag )
-    , _status( false )
+    , _status( true )
     , _request( 0 )
 {
     start();
@@ -350,9 +355,6 @@ void abort()
             return;
         }
     }
-
-    // End the thread, Not sure if is safe :S
-    cancel();
 }
 
 bool wait()
@@ -370,7 +372,10 @@ void run()
 {
     _request = new MPI_Request{};
 
-    /** Recieve the peer rank. */
+    /* Recieve the peer rank. 
+     * An asychronize function is used to allow abort an 
+     * acceptNB process.
+     */
     if( MPI_SUCCESS != MPI_Irecv( &_detail->peerRank, 1,
                             MPI_INT, MPI_ANY_SOURCE, _tag,
                             MPI_COMM_WORLD, _request) )
@@ -391,6 +396,9 @@ void run()
     }
 
     _request = 0;
+
+    if( !_status )
+        return;
 
     LBASSERT( _detail->peerRank >= 0 );
 
@@ -420,8 +428,6 @@ void run()
 
     /* Check tag is correct. */
     LBASSERT( _detail->tagSend > 0 );
-
-    _status = true;
 }
 
 private:
