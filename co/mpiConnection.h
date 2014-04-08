@@ -1,5 +1,5 @@
 
-/* Copyright (c) 2005-2014, Carlos Duelo <cduelo@cesvima.upm.es>
+/* Copyright (c) 2014, Carlos Duelo <cduelo@cesvima.upm.es>
  *
  * This file is part of Collage <https://github.com/Eyescale/Collage>
  *
@@ -36,6 +36,10 @@ namespace detail { class MPIConnection; }
  * Allows peer-to-peer connections if the MPI runtime environment has
  * been set correctly.
  *
+ * The maximum message size can be specified, if not, by defaul
+ * it is 4KB. Changing this value allow to avoid segmentate the
+ * message when sending.
+ *
  * Due to Collage is a multithreaded library, MPI connections
  * requiere at least MPI_THREAD_SERIALIZED level of thread support.
  * During the initialization Collage will request the appropriate
@@ -62,6 +66,11 @@ class MPIConnection : public Connection
         virtual ConnectionPtr acceptSync();
 
         virtual Notifier getNotifier() const { return _notifier; }
+
+        /* Set the maximum message size. 
+         * Only allow it in listener connections.
+         */
+        void setMaximumMessageSize(uint64_t size);
 
     protected:
         void readNB( void* , const uint64_t ) override { /* NOP */ }

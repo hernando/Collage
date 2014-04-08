@@ -1,5 +1,5 @@
 
-/* Copyright (c) 2005-2014, Carlos Duelo <cduelo@cesvima.upm.es>
+/* Copyright (c) 2014, Carlos Duelo <cduelo@cesvima.upm.es>
  *
  * This file is part of Collage <https://github.com/Eyescale/Collage>
  *
@@ -97,13 +97,22 @@ class Dispatcher : lunchbox::Thread
 {
 
 public:
-Dispatcher(int32_t source, int32_t tag) :
+Dispatcher(int32_t source, int32_t tag, uint64_t msgSize) :
       _source( source )
     , _tag( tag )
     , _isStopped( true )
+	, _maxMsgSize( msgSize )
     , _totalBytes( 0 )
+	, _bufferSize( msgSize )
+    , _bufferData( new unsigned char [msgSize] )
+	, _startData( _bufferData )
 {
     start();
+}
+
+~Dispatcher()
+{
+	delete _bufferData;
 }
 
 void run()
@@ -144,15 +153,17 @@ void run()
             break;;
         }
 
-        LBASSERT( bytes >= 0 );
+        LBASSERT( bytes >= 0 && bytes <= _maxMsgSize );
 
-        unsigned char buffer[bytes];
+        _buffer.lock();
+
+		_startData = _bufferData;
 
         /* Receive the message, this call is not blocking due to the
          * previous MPI_Probe call.
          */
-        if( MPI_SUCCESS != MPI_Recv( buffer, bytes, MPI_BYTE, _source, _tag, 
-                                        MPI_COMM_WORLD, MPI_STATUS_IGNORE ) )
+        if( MPI_SUCCESS != MPI_Recv( _bufferData, bytes, MPI_BYTE, _source,
+                                        _tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) )
         {
             LBERROR << "Error retrieving messages " << std::endl;
             _isStopped = true;
@@ -162,17 +173,11 @@ void run()
         /* If the peer performed a close operation a EOF is sent to indicate 
          * that connection should be close.
          */
-        if( bytes == 1 && buffer[0] == 0xFF )
+        if( bytes == 1 && _bufferData[0] == 0xFF )
         {
             LBINFO << "Received EOF, closing connection" << std::endl;
             _isStopped = true;
         }
-
-        _buffer.lock();
-
-        /** Notify there are data aviable. */
-        if( _totalBytes == 0 )
-            _buffer.signal();
 
         /* If an EOF has been received, then dispatcher is stopped and
          * there is no data to read.
@@ -182,6 +187,9 @@ void run()
         else
             _totalBytes += bytes;
 
+        /** Notify there are data aviable. */
+		_buffer.signal();
+
         _buffer.unlock();
     }
 
@@ -189,7 +197,7 @@ void run()
     _control.unlock();
 }
 
-int64_t readSync(const void * /*buffer*/, int64_t bytes)
+int64_t readSync(const void * buffer, int64_t bytes)
 {
     /** Send signal to get up dispatcher. */
     _buffer.lock();
@@ -237,6 +245,10 @@ int64_t readSync(const void * /*buffer*/, int64_t bytes)
         _totalBytes = 0;
     }
 
+	/** copy result */
+	memcpy( (void*) buffer, _startData, r );
+	_startData += r;
+
     _buffer.unlock();
 
     return r;
@@ -264,7 +276,12 @@ int32_t _tag;
 
 bool    _isStopped;
 
+int64_t _maxMsgSize;
 int64_t _totalBytes;
+int64_t _bufferSize;
+
+unsigned char * _bufferData;
+unsigned char * _startData;
 
 /** Allow wait for incommings petitions. */
 lunchbox::Condition _control;
@@ -297,6 +314,7 @@ public:
         , peerRank( -1 )
         , tagSend( -1 )
         , tagRecv( -1 )
+        , messageSize( 4096 )
         , asyncConnection( 0 )
         , dispatcher( 0 )
     {
@@ -315,6 +333,7 @@ public:
     int32_t     peerRank;
     int32_t     tagSend;
     int32_t     tagRecv;
+    uint64_t    messageSize;
 
     AsyncConnection * asyncConnection;
     Dispatcher  *     dispatcher;
@@ -404,12 +423,23 @@ void run()
 
     _detail->tagRecv = ( int32_t )tagManager.getTag( );
 
-    // Send Tag ( int32_t = 4 bytes )
-    if( MPI_SUCCESS != MPI_Send( &_detail->tagRecv, 4,
+    // Send Tag
+    if( MPI_SUCCESS != MPI_Ssend( &_detail->tagRecv, 4,
                             MPI_BYTE, _detail->peerRank,
                             _tag, MPI_COMM_WORLD ) )
     {
         LBWARN << "Error sending MPI tag to peer in a MPI connection." 
+               << std::endl;
+        _status = false;
+        return;
+    }
+
+    // Send Maximum Message Size
+    if( MPI_SUCCESS != MPI_Ssend( &_detail->messageSize, 8,
+                            MPI_BYTE, _detail->peerRank,
+                            _tag, MPI_COMM_WORLD ) )
+    {
+        LBWARN << "Error sending MPI maximum message size to peer in a MPI connection." 
                << std::endl;
         _status = false;
         return;
@@ -483,6 +513,11 @@ MPIConnection::~MPIConnection()
     delete _impl;
 }
 
+void MPIConnection::setMaximumMessageSize(uint64_t size)
+{
+    _impl->messageSize = size;
+}
+
 bool MPIConnection::connect()
 {
     LBASSERT( getDescription()->type == CONNECTIONTYPE_MPI );
@@ -507,13 +542,21 @@ bool MPIConnection::connect()
     }
 
     /* If the listener receive the rank, he should send
-     * the MPI tag used for send.
+     * the MPI tag used for send and the maximum message size.
      */
     if( MPI_SUCCESS != MPI_Recv( &_impl->tagSend, 4,
                             MPI_BYTE, _impl->peerRank,
                             cTag, MPI_COMM_WORLD, NULL ) )
     {
         LBWARN << "Could not receive MPI tag from "
+               << _impl->peerRank << " process." << std::endl;
+        return false;
+    }
+    if( MPI_SUCCESS != MPI_Recv( &_impl->messageSize, 8,
+                            MPI_BYTE, _impl->peerRank,
+                            cTag, MPI_COMM_WORLD, NULL ) )
+    {
+        LBWARN << "Could not receive maximum message size from "
                << _impl->peerRank << " process." << std::endl;
         return false;
     }
@@ -533,12 +576,15 @@ bool MPIConnection::connect()
     }
 
     /** Creating the dispatcher. */
-    _impl->dispatcher = new Dispatcher( _impl->peerRank, _impl->tagRecv );
+    _impl->dispatcher = new Dispatcher( _impl->peerRank, 
+                                _impl->tagRecv,
+                                _impl->messageSize );
 
     _setState( STATE_CONNECTED );
 
     LBINFO << "Connected with rank " << _impl->peerRank << " on tag "
-           << _impl->tagRecv << std::endl;
+           << _impl->tagRecv << " and maximum message size "
+           << _impl->messageSize << " bytes." << std::endl;
 
     return true;
 }
@@ -628,6 +674,7 @@ void MPIConnection::acceptNB()
     LBASSERT( _impl->asyncConnection == 0 )
 
     detail::MPIConnection * newImpl = new detail::MPIConnection( );
+    newImpl->messageSize = _impl->messageSize;
 
     _impl->asyncConnection = new detail::AsyncConnection( newImpl, _impl->tagRecv );
 }
@@ -653,13 +700,16 @@ ConnectionPtr MPIConnection::acceptSync()
     _impl->asyncConnection = 0;
 
     /** Create dispatcher of new connection. */
-    newImpl->dispatcher = new Dispatcher( newImpl->peerRank, newImpl->tagRecv );
+    newImpl->dispatcher = new Dispatcher( newImpl->peerRank,
+                                    newImpl->tagRecv,
+                                    newImpl->messageSize );
 
     MPIConnection* newConnection = new MPIConnection( newImpl );
     newConnection->_setState( STATE_CONNECTED );
 
     LBINFO << "Accepted to rank " << newImpl->peerRank << " on tag "
-           << newImpl->tagRecv << std::endl;
+           << newImpl->tagRecv << " and maximum message size "
+           << _impl->messageSize << " bytes." << std::endl;
 
     return newConnection;
 }
@@ -683,7 +733,9 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
     if( !isConnected() )
         return -1;
 
-    if( MPI_SUCCESS != MPI_Send( (void*)buffer, bytes,
+    uint32_t mSize = bytes > _impl->messageSize ? _impl->messageSize : bytes;
+
+    if( MPI_SUCCESS != MPI_Send( (void*)buffer, mSize,
                             MPI_BYTE, _impl->peerRank,
                             _impl->tagSend, MPI_COMM_WORLD ) )
     {
@@ -692,7 +744,7 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
         return -1;
     }
 
-    return bytes;
+    return mSize;
 }
 
 }
