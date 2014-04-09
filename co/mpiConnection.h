@@ -36,10 +36,6 @@ namespace detail { class MPIConnection; }
  * Allows peer-to-peer connections if the MPI runtime environment has
  * been set correctly.
  *
- * The maximum message size can be specified, if not, by defaul
- * it is 4KB. Changing this value allow to avoid segmentate the
- * message when sending, it the message is greater than 4KB.
- *
  * Due to Collage is a multithreaded library, MPI connections
  * requiere at least MPI_THREAD_SERIALIZED level of thread support.
  * During the initialization Collage will request the appropriate
@@ -65,22 +61,14 @@ class MPIConnection : public Connection
         virtual void acceptNB();
         virtual ConnectionPtr acceptSync();
 
-        virtual Notifier getNotifier() const { return _notifier; }
-
-        /* Set the maximum message size. 
-         * Only allow it in listener connections.
-         *
-         * @parama maximumm message size in bytes.
-         */
-        void setMaximumMessageSize(uint64_t size);
+        virtual Notifier getNotifier() const;
 
     protected:
-        void readNB( void* , const uint64_t ) override { /* NOP */ }
+        void readNB( void* , const uint64_t );
         int64_t readSync( void* buffer, const uint64_t bytes, const bool ignored);
         int64_t write( const void* buffer, const uint64_t bytes );
 
     private:
-        Notifier                            _notifier;
         detail::MPIConnection * const       _impl;
 
         void _close( const bool userClose );
