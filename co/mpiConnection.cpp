@@ -19,7 +19,6 @@
 
 #include "mpiConnection.h"
 #include "connectionDescription.h"
-#include "global.h"
 
 #include <lunchbox/scopedMutex.h>
 #include <lunchbox/condition.h>
@@ -478,10 +477,6 @@ MPIConnection::MPIConnection() :
     ConnectionDescriptionPtr description = _getDescription( );
     description->type = CONNECTIONTYPE_MPI;
     description->bandwidth = 1024000; // For example :S
-
-    /** Check if MPI is allowed. */
-    LBASSERTINFO( co::Global::isMPIAllowed( ) ,
-    "Thread support is not provided by the MPI library, so, to avoid future errors MPI connection is disabled" );
 }
 
 MPIConnection::MPIConnection(detail::MPIConnection * impl) :
@@ -491,10 +486,6 @@ MPIConnection::MPIConnection(detail::MPIConnection * impl) :
     ConnectionDescriptionPtr description = _getDescription();
     description->type = CONNECTIONTYPE_MPI;
     description->bandwidth = 1024000; // For example :S
-
-    /** Check if MPI is allowed. */
-    LBASSERTINFO( co::Global::isMPIAllowed( ) ,
-    "Thread support is not provided by the MPI library, so, to avoid future errors MPI connection is disabled" );
 }
 
 MPIConnection::~MPIConnection()

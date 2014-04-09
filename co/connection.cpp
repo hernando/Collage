@@ -41,7 +41,8 @@
 #  include "udtConnection.h"
 #endif
 #ifdef COLLAGE_USE_MPI
-#	include "mpiConnection.h"
+#   include "global.h"
+#   include "mpiConnection.h"
 #endif
 
 #include <lunchbox/scopedMutex.h>
@@ -178,7 +179,17 @@ ConnectionPtr Connection::create( ConnectionDescriptionPtr description )
 #endif
 #ifdef COLLAGE_USE_MPI
         case CONNECTIONTYPE_MPI:
-            connection = new MPIConnection;
+            /* Check if MPI is allowed:
+             * Thread support has to be provided
+             * by the MPI library, if not, to
+             * avoid future errors MPI connection is
+             * disabled.
+             * Future: fix it.
+             */
+            if( co::Global::isMPIAllowed( ) )
+                connection = new MPIConnection;
+            else
+                connection = 0;
             break;
 #endif
 

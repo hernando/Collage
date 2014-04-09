@@ -38,7 +38,7 @@ namespace detail { class MPIConnection; }
  *
  * The maximum message size can be specified, if not, by defaul
  * it is 4KB. Changing this value allow to avoid segmentate the
- * message when sending.
+ * message when sending, it the message is greater than 4KB.
  *
  * Due to Collage is a multithreaded library, MPI connections
  * requiere at least MPI_THREAD_SERIALIZED level of thread support.
@@ -69,6 +69,8 @@ class MPIConnection : public Connection
 
         /* Set the maximum message size. 
          * Only allow it in listener connections.
+         *
+         * @parama maximumm message size in bytes.
          */
         void setMaximumMessageSize(uint64_t size);
 
