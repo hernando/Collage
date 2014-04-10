@@ -211,6 +211,7 @@ void run()
 			    if( bytes == 1 &&
 				    ((unsigned char*)petition.data)[0] == 0xFF )
 				{
+					LBINFO << "Got EOF, closing connection" << std::endl;
 					_isStopped = true;
 					bytesRead = -1;
 					break;
@@ -242,6 +243,7 @@ void run()
 			    if( bytes == 1 &&
 				    _bufferData[0] == 0xFF )
 				{
+					LBINFO << "Got EOF, closing connection" << std::endl;
 					bytesRead = -1;
 					_isStopped = true;
 					break;
@@ -433,7 +435,13 @@ void run()
     if( !_status )
         return;
 
-    LBASSERT( _detail->peerRank >= 0 );
+    if( _detail->peerRank < 0 )
+	{
+		LBINFO << "Error accepting connection from rank "
+		       << _detail->peerRank << std::endl;
+		_status = false;
+		return;
+	}
 
     _detail->tagRecv = ( int32_t )tagManager.getTag( );
 
@@ -516,7 +524,10 @@ MPIConnection::~MPIConnection()
 
 co::Connection::Notifier MPIConnection::getNotifier() const
 {
-    return _impl->event->getNotifier();
+    if( isClosed())
+		return -1;
+	else
+        return _impl->event->getNotifier();
 }
 
 bool MPIConnection::connect()
@@ -633,16 +644,30 @@ void MPIConnection::_close(const bool userClose)
 
     if( _impl->dispatcher != 0 )
     {
+		/* Send remote connetion EOF and close dispatcher.
+		 * If is closed for unknow reason send async.
+		 */
+		unsigned char eof = 0xFF;
         if( userClose )
         {
-            /** Send remote connetion EOF and close dispatcher. */
-            unsigned char eof = 0xFF;
-            if( MPI_SUCCESS != MPI_Send( &eof, 1,
+            if( MPI_SUCCESS != MPI_Ssend( &eof, 1,
                                     MPI_BYTE, _impl->peerRank,
                                     _impl->tagSend, MPI_COMM_WORLD ) )
             {
                 LBWARN << "Error sending eof to remote " << std::endl;
             }
+        }
+		else
+        {
+			MPI_Request request;
+            if( MPI_SUCCESS != MPI_Isend( &eof, 1,
+                                    MPI_BYTE, _impl->peerRank,
+                                    _impl->tagSend, MPI_COMM_WORLD,
+									&request ) )
+            {
+                LBWARN << "Error sending eof to remote " << std::endl;
+            }
+
         }
 
         /** Close Dispacher. */
