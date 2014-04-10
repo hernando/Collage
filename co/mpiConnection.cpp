@@ -539,11 +539,12 @@ bool MPIConnection::connect()
     {
         LBWARN << "Could not connect to "
                << _impl->peerRank << " process." << std::endl;
+        _close(false);
         return false;
     }
 
     /* If the listener receive the rank, he should send
-     * the MPI tag used for send and the maximum message size.
+     * the MPI tag used for send.
      */
     if( MPI_SUCCESS != MPI_Recv( &_impl->tagSend, 4,
                             MPI_BYTE, _impl->peerRank,
@@ -551,6 +552,7 @@ bool MPIConnection::connect()
     {
         LBWARN << "Could not receive MPI tag from "
                << _impl->peerRank << " process." << std::endl;
+        _close(false);
         return false;
     }
 
@@ -565,6 +567,7 @@ bool MPIConnection::connect()
     {
         LBWARN << "Could not connect to "
                << _impl->peerRank << " process." << std::endl;
+        _close(false);
         return false;
     }
 
@@ -576,8 +579,9 @@ bool MPIConnection::connect()
     _setState( STATE_CONNECTED );
 
     LBINFO << "Connected with rank " << _impl->peerRank << " on tag "
-           << _impl->tagRecv << " and maximum message size "
-           <<  std::endl;
+           << _impl->tagRecv <<  std::endl;
+
+    _impl->event->set();
 
     return true;
 }
@@ -595,6 +599,7 @@ bool MPIConnection::listen()
         LBWARN << "Tag " << tag << " is already register." << std::endl;
         if( isListening( ) )
             LBINFO << "Probably, listen has already called before." << std::endl;
+        _close(false);
         return false;
     }
 
@@ -650,9 +655,9 @@ void MPIConnection::_close(const bool userClose)
     /** Deregister tags. */
     tagManager.deregisterTag( _impl->tagRecv );
 
-    _setState( STATE_CLOSED );
-
     _impl->event->close();
+
+    _setState( STATE_CLOSED );
 }
 
 void MPIConnection::acceptNB()
@@ -670,6 +675,8 @@ void MPIConnection::acceptNB()
 
     detail::MPIConnection * newImpl = new detail::MPIConnection( );
 
+    _impl->event->reset();
+
     _impl->asyncConnection = new detail::AsyncConnection( newImpl
                                             ,_impl->tagRecv
                                             ,_impl->event);
@@ -686,7 +693,7 @@ ConnectionPtr MPIConnection::acceptSync()
     {
         LBWARN << "Error accepting a MPI connection, closing connection."
                << std::endl;
-        close();
+        _close(false);
         return 0;
     }
 
@@ -704,14 +711,14 @@ ConnectionPtr MPIConnection::acceptSync()
     newConnection->_setState( STATE_CONNECTED );
 
     LBINFO << "Accepted to rank " << newImpl->peerRank << " on tag "
-           << newImpl->tagRecv << " and maximum message size "
-           << std::endl;
+           << newImpl->tagRecv << std::endl;
 
     return newConnection;
 }
 
 void MPIConnection::readNB( void* buffer, const uint64_t bytes)
 {
+    _impl->event->reset();
     _impl->dispatcher->readNB(buffer, bytes);
 }
 
@@ -746,6 +753,8 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
         close();
         return -1;
     }
+
+    _impl->event->reset();
 
     return bytes;
 }
