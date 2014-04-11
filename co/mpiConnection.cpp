@@ -421,7 +421,8 @@ void run()
         return;
     }
 
-    if( MPI_SUCCESS !=  MPI_Wait( _request, MPI_STATUS_IGNORE ) )
+	MPI_Status status;
+    if( MPI_SUCCESS !=  MPI_Wait( _request, &status ) )
     {
         LBWARN << "Could not start accepting a MPI connection, "
                << "closing connection." << std::endl;
@@ -430,9 +431,19 @@ void run()
         return;
     }
 
+	int cancelled = -1;
+	if( MPI_SUCCESS != MPI_Test_cancelled(&status, &cancelled ) )
+	{
+		LBWARN << "Could not start accepting a MPI connection, "
+			<< "closing connection." << std::endl;
+		_request = 0;
+		_status = false;
+		return;
+	}
+
     _request = 0;
 
-    if( !_status )
+    if( cancelled )
         return;
 
     if( _detail->peerRank < 0 )
