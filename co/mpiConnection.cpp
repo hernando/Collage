@@ -392,6 +392,7 @@ void abort()
             return;
         }
     }
+    join();
 }
 
 bool wait()
@@ -783,7 +784,7 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
     if( !isConnected() )
         return -1;
 
-    if( MPI_SUCCESS != MPI_Send( (void*)buffer, bytes,
+    if( MPI_SUCCESS != MPI_Ssend( (void*)buffer, bytes,
                             MPI_BYTE, _impl->peerRank,
                             _impl->tagSend, MPI_COMM_WORLD ) )
     {
