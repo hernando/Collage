@@ -372,6 +372,7 @@ AsyncConnection(MPIConnection * detail, int32_t tag, EventConnectionPtr notifier
       _detail( detail )
     , _tag( tag )
     , _status( true )
+    , _running( true )
     , _request( 0 )
     , _notifier( notifier )
 {
@@ -380,6 +381,8 @@ AsyncConnection(MPIConnection * detail, int32_t tag, EventConnectionPtr notifier
 
 void abort()
 {
+    _running = false;
+    #if 0
     if(_request != 0 )
     {
         if( MPI_SUCCESS != MPI_Cancel( _request ) &&
@@ -392,6 +395,7 @@ void abort()
             return;
         }
     }
+    #endif
     join();
 }
 
@@ -425,29 +429,31 @@ void run()
     }
 
 	MPI_Status status;
-    if( MPI_SUCCESS !=  MPI_Wait( _request, &status ) )
+    int message = 0;
+    while( !message && _running)
     {
-        LBWARN << "Could not start accepting a MPI connection, "
-               << "closing connection." << std::endl;
-        _request = 0;
-        _status = false;
-        return;
+        if( MPI_SUCCESS !=  MPI_Test( _request, &message, &status ) )
+        {
+            LBWARN << "Could not start accepting a MPI connection, "
+                   << "closing connection." << std::endl;
+            _status = false;
+            return;
+        }
     }
 
-	int cancelled = -1;
-	if( MPI_SUCCESS != MPI_Test_cancelled(&status, &cancelled ) )
-	{
-		LBWARN << "Could not start accepting a MPI connection, "
-			<< "closing connection." << std::endl;
-		_request = 0;
-		_status = false;
-		return;
-	}
+    if( !_running )
+    {
+        if( MPI_SUCCESS != MPI_Cancel( _request ) && 
+            MPI_SUCCESS !=  MPI_Request_free( _request ) ) 
+        {
+            LBWARN << "Could not start accepting a MPI connection, "
+                   << "closing connection." << std::endl;
+            _status = false;
+        }
+    }
 
-    _request = 0;
-
-    if( cancelled )
-        return;
+    delete _request;
+    _request  = 0;
 
     if( _detail->peerRank < 0 )
 	{
@@ -492,6 +498,8 @@ private:
 MPIConnection * _detail;
 int             _tag;
 bool            _status;
+
+lunchbox::Monitor< bool > _running;
 
 MPI_Request *   _request;
 EventConnectionPtr _notifier;
