@@ -143,6 +143,7 @@ void run()
         if( petition.bytes < 0)
         {
 			LBINFO << "Exit MPI dispatcher" << std::endl;
+            _isStopped = true;
             return;
         }
 
@@ -179,6 +180,7 @@ void run()
 			{
 				LBERROR << "Error retrieving messages " << std::endl;
 				_isStopped = true;
+				bytesRead  = -1;
 				break;
 			}
 
@@ -189,7 +191,7 @@ void run()
 			{
 				LBERROR << "Error retrieving messages " << std::endl;
 				_isStopped = true;
-				petition.bytes = -1;
+				bytesRead  = -1;
 				break;
 			}
 
