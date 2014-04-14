@@ -175,14 +175,23 @@ void run()
         while( petition.bytes > 0 )
 		{
 			MPI_Status status;
-
-			if( MPI_SUCCESS != MPI_Probe( _source, _tag, MPI_COMM_WORLD, &status ) )
-			{
-				LBERROR << "Error retrieving messages " << std::endl;
-				_isStopped = true;
-				bytesRead  = -1;
-				break;
-			}
+            int message = 0;
+            while( !message && !_isStopped )
+            {
+                if( MPI_SUCCESS != MPI_Iprobe( _source, _tag, MPI_COMM_WORLD, &message, &status ) )
+                {
+                    LBERROR << "Error retrieving messages " << std::endl;
+                    _isStopped = true;
+                    bytesRead  = -1;
+                    break;
+                }
+            }
+            
+            if( _isStopped )
+            {
+                bytesRead  = -1;
+                break;
+            }
 
 			int32_t bytes = 0;
 
@@ -274,6 +283,9 @@ void readNB(void * buffer, int64_t bytes)
 
 int64_t readSync(const void * /*buffer*/, int64_t /*bytes*/)
 {
+    if( _isStopped ) 
+        return -1;
+
     int64_t received = _readyQ.pop();
 	#if 0
     if( !_readyQ.timedPop( co::Global::getTimeout(), &received ) )
@@ -286,6 +298,7 @@ int64_t readSync(const void * /*buffer*/, int64_t /*bytes*/)
 
 bool close()
 {
+    _isStopped = true;
 	_dispatcherQ.push( Petition{ -1, 0 } );
     join();
 
@@ -373,7 +386,6 @@ AsyncConnection(MPIConnection * detail, int32_t tag, EventConnectionPtr notifier
     , _tag( tag )
     , _status( true )
     , _running( true )
-    , _request( 0 )
     , _notifier( notifier )
 {
     start();
@@ -382,20 +394,6 @@ AsyncConnection(MPIConnection * detail, int32_t tag, EventConnectionPtr notifier
 void abort()
 {
     _running = false;
-    #if 0
-    if(_request != 0 )
-    {
-        if( MPI_SUCCESS != MPI_Cancel( _request ) &&
-            MPI_SUCCESS != MPI_Request_free(_request) )
-        {
-            LBWARN << "Could not start accepting a MPI connection, "
-                   << "closing connection." << std::endl;
-            _request = 0;
-            _status = false;
-            return;
-        }
-    }
-    #endif
     join();
 }
 
@@ -412,15 +410,13 @@ MPIConnection * getImpl()
 
 void run()
 {
-    _request = new MPI_Request{};
-
     /* Recieve the peer rank. 
      * An asychronize function is used to allow abort an 
      * acceptNB process.
      */
     if( MPI_SUCCESS != MPI_Irecv( &_detail->peerRank, 1,
                             MPI_INT, MPI_ANY_SOURCE, _tag,
-                            MPI_COMM_WORLD, _request) )
+                            MPI_COMM_WORLD, &_request) )
     {
         LBWARN << "Could not start accepting a MPI connection, "
                << "closing connection." << std::endl;
@@ -432,7 +428,7 @@ void run()
     int message = 0;
     while( !message && _running)
     {
-        if( MPI_SUCCESS !=  MPI_Test( _request, &message, &status ) )
+        if( MPI_SUCCESS !=  MPI_Test( &_request, &message, &status ) )
         {
             LBWARN << "Could not start accepting a MPI connection, "
                    << "closing connection." << std::endl;
@@ -443,17 +439,16 @@ void run()
 
     if( !_running )
     {
-        if( MPI_SUCCESS != MPI_Cancel( _request ) && 
-            MPI_SUCCESS !=  MPI_Request_free( _request ) ) 
+        if( MPI_SUCCESS != MPI_Cancel( &_request ) && 
+            MPI_SUCCESS !=  MPI_Request_free( &_request ) ) 
         {
             LBWARN << "Could not start accepting a MPI connection, "
                    << "closing connection." << std::endl;
             _status = false;
         }
-    }
 
-    delete _request;
-    _request  = 0;
+        return;
+    }
 
     if( _detail->peerRank < 0 )
 	{
@@ -501,8 +496,8 @@ bool            _status;
 
 lunchbox::Monitor< bool > _running;
 
-MPI_Request *   _request;
-EventConnectionPtr _notifier;
+MPI_Request         _request;
+EventConnectionPtr  _notifier;
 };
 
 }
@@ -679,6 +674,7 @@ void MPIConnection::_close(const bool userClose)
                 LBWARN << "Error sending eof to remote " << std::endl;
             }
         }
+        #if 0
 		else
         {
 			MPI_Request request;
@@ -691,6 +687,7 @@ void MPIConnection::_close(const bool userClose)
             }
 
         }
+        #endif
 
         /** Close Dispacher. */
         _impl->dispatcher->close();
@@ -698,6 +695,7 @@ void MPIConnection::_close(const bool userClose)
 
     if( _impl->asyncConnection != 0 )
         _impl->asyncConnection->abort( );
+    
 
     /** Deregister tags. */
     tagManager.deregisterTag( _impl->tagRecv );
