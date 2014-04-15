@@ -56,7 +56,7 @@ class MPIConnection : public Connection
 
         virtual bool connect();
         virtual bool listen();
-        virtual void close();
+        virtual void close() { _close(); }
 
         virtual void acceptNB();
         virtual ConnectionPtr acceptSync();
@@ -71,7 +71,7 @@ class MPIConnection : public Connection
     private:
         detail::MPIConnection * const       _impl;
 
-        void _close( const bool userClose );
+        void _close();
 };
 
 }

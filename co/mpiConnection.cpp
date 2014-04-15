@@ -26,6 +26,7 @@
 #include <lunchbox/scopedMutex.h>
 #include <lunchbox/mtQueue.h>
 
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/thread/thread.hpp>
 
 #include <set>
@@ -107,9 +108,10 @@ class Dispatcher : lunchbox::Thread
 {
 
 public:
-Dispatcher(int32_t source, int32_t tag, EventConnectionPtr notifier) :
+Dispatcher(int32_t source, int32_t tag, int32_t tagClose, EventConnectionPtr notifier) :
       _source( source )
     , _tag( tag )
+    , _tagClose( tagClose )
     , _isStopped( true )
     , _notifier( notifier )
 	, _bufferData( 0 )
@@ -298,6 +300,16 @@ int64_t readSync(const void * /*buffer*/, int64_t /*bytes*/)
 
 bool close()
 {
+    /* Send remote connetion EOF and close dispatcher.
+     * If is closed for unknow reason send async.
+     */
+    unsigned char eof = 0xFF;
+    if( MPI_SUCCESS != MPI_Send( &eof, 1,
+                            MPI_BYTE, _source,
+                            _tagClose, MPI_COMM_WORLD ) )
+    {
+        LBWARN << "Error sending eof to remote " << std::endl;
+    }
     _isStopped = true;
 	_dispatcherQ.push( Petition{ -1, 0 } );
     join();
@@ -309,6 +321,7 @@ private:
 
 int32_t _source;
 int32_t _tag;
+int32_t _tagClose;
 
 lunchbox::Monitor< bool > _isStopped;
 
@@ -435,6 +448,8 @@ void run()
             _status = false;
             return;
         }
+        /** Wait 2 ms, reduce CPU usage. */
+        boost::this_thread::sleep( boost::posix_time::milliseconds( 2 ));
     }
 
     if( !_running )
@@ -525,7 +540,7 @@ MPIConnection::MPIConnection(detail::MPIConnection * impl) :
 
 MPIConnection::~MPIConnection()
 {
-    _close( false );
+    _close();
 
     if( _impl->asyncConnection != 0 )
     {
@@ -567,7 +582,7 @@ bool MPIConnection::connect()
     {
         LBWARN << "Could not connect to "
                << _impl->peerRank << " process." << std::endl;
-        _close(false);
+        _close();
         return false;
     }
 
@@ -580,7 +595,7 @@ bool MPIConnection::connect()
     {
         LBWARN << "Could not receive MPI tag from "
                << _impl->peerRank << " process." << std::endl;
-        _close(false);
+        _close();
         return false;
     }
 
@@ -595,21 +610,20 @@ bool MPIConnection::connect()
     {
         LBWARN << "Could not connect to "
                << _impl->peerRank << " process." << std::endl;
-        _close(false);
+        _close();
         return false;
     }
 
     /** Creating the dispatcher. */
     _impl->dispatcher = new Dispatcher( _impl->peerRank
                                 ,_impl->tagRecv
+                                ,_impl->tagSend
                                 ,_impl->event );
 
     _setState( STATE_CONNECTED );
 
     LBINFO << "Connected with rank " << _impl->peerRank << " on tag "
            << _impl->tagRecv <<  std::endl;
-
-    _impl->event->set();
 
     return true;
 }
@@ -627,7 +641,7 @@ bool MPIConnection::listen()
         LBWARN << "Tag " << tag << " is already register." << std::endl;
         if( isListening( ) )
             LBINFO << "Probably, listen has already called before." << std::endl;
-        _close(false);
+        _close();
         return false;
     }
 
@@ -642,60 +656,25 @@ bool MPIConnection::listen()
     return true;
 }
 
-void MPIConnection::close()
-{
-    _close( true );
-}
-
 /* The close can occur for two reasons:
  * - Application call MPIConnection::close(), in this case
  * the remote peer should be notified by sending an EOF.
  * - Connection has been destroyed.
  */ 
-void MPIConnection::_close(const bool userClose)
+void MPIConnection::_close()
 {
     if( isClosed())
         return;
 
     _setState( STATE_CLOSING );
 
+    /** Close Dispacher. */
     if( _impl->dispatcher != 0 )
-    {
-		/* Send remote connetion EOF and close dispatcher.
-		 * If is closed for unknow reason send async.
-		 */
-		unsigned char eof = 0xFF;
-        if( userClose )
-        {
-            if( MPI_SUCCESS != MPI_Ssend( &eof, 1,
-                                    MPI_BYTE, _impl->peerRank,
-                                    _impl->tagSend, MPI_COMM_WORLD ) )
-            {
-                LBWARN << "Error sending eof to remote " << std::endl;
-            }
-        }
-        #if 0
-		else
-        {
-			MPI_Request request;
-            if( MPI_SUCCESS != MPI_Isend( &eof, 1,
-                                    MPI_BYTE, _impl->peerRank,
-                                    _impl->tagSend, MPI_COMM_WORLD,
-									&request ) )
-            {
-                LBWARN << "Error sending eof to remote " << std::endl;
-            }
-
-        }
-        #endif
-
-        /** Close Dispacher. */
         _impl->dispatcher->close();
-    }
 
+    /** Abort acceptNB */
     if( _impl->asyncConnection != 0 )
         _impl->asyncConnection->abort( );
-    
 
     /** Deregister tags. */
     tagManager.deregisterTag( _impl->tagRecv );
@@ -738,7 +717,7 @@ ConnectionPtr MPIConnection::acceptSync()
     {
         LBWARN << "Error accepting a MPI connection, closing connection."
                << std::endl;
-        _close(false);
+        _close();
         return 0;
     }
 
@@ -750,6 +729,7 @@ ConnectionPtr MPIConnection::acceptSync()
     /** Create dispatcher of new connection. */
     newImpl->dispatcher = new Dispatcher( newImpl->peerRank
                                     ,newImpl->tagRecv
+                                    ,newImpl->tagSend
                                     ,newImpl->event );
 
     MPIConnection* newConnection = new MPIConnection( newImpl );
@@ -778,7 +758,7 @@ int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
     if( bytesRead < 0 )
     {
         LBWARN << "Read error, closing connection" << std::endl;
-        _close( false );
+        _close();
         return -1;
     }
 
@@ -798,8 +778,6 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
         close();
         return -1;
     }
-
-    _impl->event->reset();
 
     return bytes;
 }
