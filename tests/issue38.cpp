@@ -69,6 +69,9 @@ int main( int argc, char **argv )
 {
     co::init( argc, argv );
     co::ConnectionDescriptionPtr desc = new co::ConnectionDescription;
+    desc->type = co::CONNECTIONTYPE_MPI;
+    desc->rank = 0;
+    desc->port = 1234;
     desc->setHostname( "127.0.0.1" );
 
     co::ConnectionPtr listener = co::Connection::create( desc );

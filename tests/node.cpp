@@ -88,8 +88,9 @@ int main( int argc, char **argv )
     lunchbox::RefPtr< Server > server = new Server;
     co::ConnectionDescriptionPtr connDesc = new co::ConnectionDescription;
 
-    connDesc->type = co::CONNECTIONTYPE_TCPIP;
+    connDesc->type = co::CONNECTIONTYPE_MPI;
     connDesc->port = port;
+    connDesc->rank = 0;
     connDesc->setHostname( "localhost" );
     server->addConnectionDescription( connDesc );
 
@@ -99,7 +100,8 @@ int main( int argc, char **argv )
     serverProxy->addConnectionDescription( connDesc );
 
     connDesc = new co::ConnectionDescription;
-    connDesc->type = co::CONNECTIONTYPE_TCPIP;
+    connDesc->type = co::CONNECTIONTYPE_MPI;
+    connDesc->rank = 0;
     connDesc->setHostname( "localhost" );
 
     co::LocalNodePtr client = new co::LocalNode;

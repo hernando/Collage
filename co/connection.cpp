@@ -189,7 +189,7 @@ ConnectionPtr Connection::create( ConnectionDescriptionPtr description )
             if( co::Global::isMPIAllowed( ) )
                 connection = new MPIConnection;
             else
-                connection = 0;
+                return 0;
             break;
 #endif
 

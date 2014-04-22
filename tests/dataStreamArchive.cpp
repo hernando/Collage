@@ -85,7 +85,8 @@ int main( int argc, char **argv )
     co::ConnectionDescriptionPtr connDesc = new co::ConnectionDescription;
 
     lunchbox::RNG rng;
-    connDesc->type = co::CONNECTIONTYPE_TCPIP;
+    connDesc->type = co::CONNECTIONTYPE_MPI;
+    connDesc->rank = 0;
     connDesc->port = (rng.get<uint16_t>() % 60000) + 1024;
     connDesc->setHostname( "localhost" );
 
@@ -97,7 +98,8 @@ int main( int argc, char **argv )
     serverProxy->addConnectionDescription( connDesc );
 
     connDesc = new co::ConnectionDescription;
-    connDesc->type = co::CONNECTIONTYPE_TCPIP;
+    connDesc->type = co::CONNECTIONTYPE_MPI;
+    connDesc->rank = 0;
     connDesc->setHostname( "localhost" );
 
     co::LocalNodePtr client = new co::LocalNode;

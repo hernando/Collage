@@ -39,7 +39,9 @@ static co::ConnectionType types[] =
     co::CONNECTIONTYPE_NAMEDPIPE,
     co::CONNECTIONTYPE_RSP,
     co::CONNECTIONTYPE_RDMA,
+#ifdef COLLAGE_USE_MPI
     co::CONNECTIONTYPE_MPI,
+#endif
 //    co::CONNECTIONTYPE_UDT,
     co::CONNECTIONTYPE_NONE // must be last
 };
@@ -91,7 +93,7 @@ int main( int argc, char **argv )
 		{
             desc->setHostname( "239.255.12.34" );
 		}
-		else if ( desc->type >= co::CONNECTIONTYPE_MPI )
+		else if( desc->type >= co::CONNECTIONTYPE_MPI )
 		{
 			// The test is a singlenton MPI process, there is just one rank defined
 			desc->rank = 0; 

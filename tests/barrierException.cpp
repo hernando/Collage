@@ -51,7 +51,8 @@ public:
     {
         co::ConnectionDescriptionPtr description =
             new co::ConnectionDescription;
-        description->type = co::CONNECTIONTYPE_TCPIP;
+        description->type = co::CONNECTIONTYPE_MPI;
+        description->rank = 0;
         description->port = port;
         _node->addConnectionDescription( description );
 
@@ -121,6 +122,8 @@ public:
         co::NodePtr server = new co::Node;
         co::ConnectionDescriptionPtr serverDesc =
             new co::ConnectionDescription;
+        serverDesc->type = co::CONNECTIONTYPE_MPI;
+        serverDesc->rank = 0;
         serverDesc->port = _serverPort;
         server->addConnectionDescription( serverDesc );
         TEST( _node->connect( server ));
