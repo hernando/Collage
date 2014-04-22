@@ -51,7 +51,7 @@ public:
      */
     enum Counter
     {
-        COUNTER_MAP_OBJECT_REMOTE, //!< #of mapObjects served for other nodes
+        COUNTER_MAP_OBJECT_REMOTE, //!< Num of mapObjects served for other nodes
         COUNTER_ALL // must be last
     };
 
@@ -561,7 +561,7 @@ private:
 
     NodePtr _connect( const NodeID& nodeID, NodePtr peer );
     NodePtr _connectFromZeroconf( const NodeID& nodeID );
-    lunchbox::RequestFuture< void > _removeListener( ConnectionPtr connection );
+    lunchbox::Request< void > _removeListener( ConnectionPtr connection );
     uint32_t _connect( NodePtr node );
     uint32_t _connect( NodePtr node, ConnectionPtr connection );
 
