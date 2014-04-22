@@ -134,44 +134,71 @@ void run()
     {
         /* Wait for new petitions, MPI_Probe is blocking but
          * it is a cpu intensive function, so, a no active
-         * waiting is used.
+         * waiting is used. However, every 1 ms a Iprobe is
+         * executed for #38 issue.
+         *
+         * Note from MPI documentation:
+         * It is not necessary to receive a message immediately
+         * after it has been probed for, and the same message
+         * may be probed for several times before it is received.
          */
-		Petition petition  = _dispatcherQ.pop( );
-
+		Petition petition;
         bytesRead = 0;
+
+        if( !_dispatcherQ.timedPop( 1 /*ms*/, petition ) )
+        {
+            int flag = -1;
+            MPI_Status status;
+            if( MPI_SUCCESS != MPI_Iprobe( MPI_ANY_SOURCE
+                                , _tag, MPI_COMM_WORLD
+                                , &flag, &status ) )
+            {
+                LBERROR << "Error retrieving messages " << std::endl;
+                bytesRead  = -1;
+                break;
+            }
+
+            if( !flag )
+                continue;
+
+            _notifier->set();
+            petition = _dispatcherQ.pop();
+
+            LBASSERT( _bytesReceived <= 0 );
+        }
 
         /** Check if not stopped and start MPI_Probe. */
         if( petition.bytes < 0)
         {
-			LBINFO << "Exit MPI dispatcher" << std::endl;
+            LBINFO << "Exit MPI dispatcher" << std::endl;
             bytesRead = -1;
             break;
         }
 
-		/** There are bytes from last MPI_Recv */
-		if( _bytesReceived > 0 )
-		{
-			LBASSERT( _bufferData != 0 );
+        /** There are bytes from last MPI_Recv */
+        if( _bytesReceived > 0 )
+        {
+            LBASSERT( _bufferData != 0 );
 
-			if( _bytesReceived > petition.bytes )
-			{
-				memcpy( petition.data, _startData, petition.bytes );
-				_startData    += petition.bytes;
-				bytesRead      = petition.bytes;
-				petition.bytes = 0;
-			}
-			else
-			{
-				memcpy( petition.data, _startData, _bytesReceived );
-				petition.data    = (unsigned char*)petition.data + _bytesReceived;
-				petition.bytes  -= _bytesReceived;
-				bytesRead        = _bytesReceived;
-				delete _bufferData;
-				_bytesReceived   = 0;
-				_startData       = 0;
-				_bufferData      = 0;
-			}
-		}
+            if( _bytesReceived > petition.bytes )
+            {
+                memcpy( petition.data, _startData, petition.bytes );
+                _startData    += petition.bytes;
+                bytesRead      = petition.bytes;
+                petition.bytes = 0;
+            }
+            else
+            {
+                memcpy( petition.data, _startData, _bytesReceived );
+                petition.data    = (unsigned char*)petition.data + _bytesReceived;
+                petition.bytes  -= _bytesReceived;
+                bytesRead        = _bytesReceived;
+                delete _bufferData;
+                _bytesReceived   = 0;
+                _startData       = 0;
+                _bufferData      = 0;
+            }
+        }
 
         while( petition.bytes > 0 )
 		{
@@ -293,13 +320,10 @@ void readNB(void * buffer, int64_t bytes)
 
 int64_t readSync(const void * /*buffer*/, int64_t /*bytes*/)
 {
-    int64_t received = _readyQ.pop();
-	#if 0
-    if( !_readyQ.timedPop( co::Global::getTimeout(), &received ) )
+    int64_t received = 0;
+    if( !_readyQ.timedPop( (const unsigned) co::Global::getTimeout(), received ) )
 	    return -1;
-	
-	LBASSERT( bytes == received );
-	#endif
+
 	return received;
 }
 
