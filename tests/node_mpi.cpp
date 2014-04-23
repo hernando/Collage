@@ -87,6 +87,13 @@ int main( int argc, char **argv )
 {
     co::init( argc, argv );
 
+    if( co::Global::getMPISize() == 1 )
+    {
+        std::cout << "Test for 2 o more MPI process." << std::endl;
+        co::exit();
+        return EXIT_SUCCESS;
+    }
+
     lunchbox::RNG rng;
     const uint16_t port = 1024;
 
