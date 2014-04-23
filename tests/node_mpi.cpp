@@ -1,6 +1,7 @@
 
 /* Copyright (c) 2005-2012, Stefan Eilemann <eile@equalizergraphics.com>
  *                    2012, Daniel Nachbaur <danielnachbaur@gmail.com>
+ *                    2014, Carlos Duelo    <cduelo@cesvima.upm.es>
  *
  * This library is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -159,6 +160,7 @@ int main( int argc, char **argv )
     co::exit();
     return EXIT_SUCCESS;
 }
+
 #else
 
 int main( int argc, char **argv )

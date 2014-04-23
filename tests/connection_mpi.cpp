@@ -1,5 +1,6 @@
 
 /* Copyright (c) 2010-2014, Stefan Eilemann <eile@equalizergraphics.com>
+ *                    2014, Carlos Duelo <cduelo@cesvima.upm.es>
  *
  * This library is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published

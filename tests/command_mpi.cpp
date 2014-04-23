@@ -1,5 +1,6 @@
 
 /* Copyright (c) 2013-2014, Stefan.Eilemann@epfl.ch
+ *                    2014, cduelo@cesvima.upm.es
  *
  * This library is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
