@@ -42,6 +42,10 @@ namespace co
 
 		/** @return true if MPI communications are allowed, false otherwise @version 1.2 */
 		CO_API static bool isMPIAllowed();
+
+        CO_API static int getMPIRank();
+
+        CO_API static int getMPISize();
 		#endif
 
         /**
