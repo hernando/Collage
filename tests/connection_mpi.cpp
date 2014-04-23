@@ -63,7 +63,7 @@ int main( int argc, char **argv )
         co::ConnectionDescriptionPtr desc = new co::ConnectionDescription;
         desc->type = types[i];
         desc->rank = 0; 
-        desc->port = 1252; 
+        desc->port = 6225; 
         desc->setHostname( "127.0.0.1" );
 
         lunchbox::Clock clock;
@@ -77,6 +77,7 @@ int main( int argc, char **argv )
                 continue;
             }
 
+			MPI_Barrier( MPI_COMM_WORLD );
 
             const bool listening = listener->listen();
             if( !listening )
@@ -112,6 +113,8 @@ int main( int argc, char **argv )
         }
         else
         {
+			MPI_Barrier( MPI_COMM_WORLD );
+
             co::ConnectionPtr writer = co::Connection::create( desc );
             TEST( writer->connect( ));
 

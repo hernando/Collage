@@ -162,7 +162,8 @@ void run()
                 continue;
 
             _notifier->set();
-            petition = _dispatcherQ.pop();
+            //petition = _dispatcherQ.pop();
+			continue;
 
             LBASSERT( _bytesReceived <= 0 );
         }
@@ -725,8 +726,6 @@ void MPIConnection::acceptNB()
 
     detail::MPIConnection * newImpl = new detail::MPIConnection( );
 
-    _impl->event->reset();
-
     _impl->asyncConnection = new detail::AsyncConnection( newImpl
                                             ,_impl->tagRecv
                                             ,_impl->event);
@@ -766,12 +765,13 @@ ConnectionPtr MPIConnection::acceptSync()
     LBINFO << "Accepted to rank " << newImpl->peerRank << " on tag "
            << newImpl->tagRecv << std::endl;
 
+    _impl->event->reset();
+
     return newConnection;
 }
 
 void MPIConnection::readNB( void* buffer, const uint64_t bytes)
 {
-    _impl->event->reset();
     _impl->dispatcher->readNB(buffer, bytes);
 }
 
@@ -790,6 +790,7 @@ int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
         return -1;
     }
 
+    _impl->event->reset();
     return bytesRead;
 }
 
