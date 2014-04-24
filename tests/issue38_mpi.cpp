@@ -113,7 +113,6 @@ int main( int argc, char **argv )
 
 		for( size_t i = 0; i < NPACKETS * NCONNECTIONS ; ++i )
 		{
-			std::cout<<i<<" "<<NPACKETS * NCONNECTIONS<<std::endl;
 			const co::ConnectionSet::Event result = set.select();
 			TESTINFO( result == co::ConnectionSet::EVENT_DATA, result );
 

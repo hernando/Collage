@@ -147,25 +147,25 @@ void run()
 
         if( !_dispatcherQ.timedPop( 1 /*ms*/, petition ) )
         {
-            int flag = -1;
-            MPI_Status status;
-            if( MPI_SUCCESS != MPI_Iprobe( MPI_ANY_SOURCE
-                                , _tag, MPI_COMM_WORLD
-                                , &flag, &status ) )
+            if( _bytesReceived <= 0 )
             {
-                LBERROR << "Error retrieving messages " << std::endl;
-                bytesRead  = -1;
-                break;
+                int flag = -1;
+                MPI_Status status;
+                if( MPI_SUCCESS != MPI_Iprobe( MPI_ANY_SOURCE
+                                    , _tag, MPI_COMM_WORLD
+                                    , &flag, &status ) )
+                {
+                    LBERROR << "Error retrieving messages " << std::endl;
+                    bytesRead  = -1;
+                    break;
+                }
+
+                if( !flag )
+                    continue;
             }
 
-            if( !flag )
-                continue;
-
             _notifier->set();
-            //petition = _dispatcherQ.pop();
 			continue;
-
-            LBASSERT( _bytesReceived <= 0 );
         }
 
         /** Check if not stopped and start MPI_Probe. */
@@ -184,9 +184,10 @@ void run()
             if( _bytesReceived > petition.bytes )
             {
                 memcpy( petition.data, _startData, petition.bytes );
-                _startData    += petition.bytes;
-                bytesRead      = petition.bytes;
-                petition.bytes = 0;
+                _startData     += petition.bytes;
+                _bytesReceived -= petition.bytes;
+                bytesRead       = petition.bytes;
+                petition.bytes  = 0;
             }
             else
             {
@@ -203,6 +204,7 @@ void run()
 
         while( petition.bytes > 0 )
 		{
+            LBASSERT( _bytesReceived <= 0 );
 			MPI_Status status;
             if( MPI_SUCCESS != MPI_Probe( MPI_ANY_SOURCE, _tag, MPI_COMM_WORLD, &status ) )
             {
@@ -551,7 +553,6 @@ MPIConnection::MPIConnection() :
     description->bandwidth = 1024000; // For example :S
 
     LBCHECK( _impl->event->connect( ));
-
 }
 
 MPIConnection::MPIConnection(detail::MPIConnection * impl) :
