@@ -212,6 +212,8 @@ void run()
                 bytesRead  = -1;
                 break;
             }
+        
+			_notifier->set();
 
 			int32_t bytes = 0;
 
@@ -308,12 +310,11 @@ void run()
             break;
 
 		_readyQ.push( bytesRead );
-        _notifier->set();
     }
 
     LBASSERT( bytesRead < 0 )
-    _readyQ.push( bytesRead );
     _notifier->set();
+    _readyQ.push( bytesRead );
 }
 
 void readNB(void * buffer, int64_t bytes)

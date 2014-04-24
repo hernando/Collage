@@ -64,7 +64,7 @@ int main( int argc, char **argv )
         co::ConnectionDescriptionPtr desc = new co::ConnectionDescription;
         desc->type = types[i];
         desc->rank = 0; 
-        desc->port = 6225; 
+        desc->port = 2048; 
         desc->setHostname( "127.0.0.1" );
 
         lunchbox::Clock clock;
