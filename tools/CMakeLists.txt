@@ -22,3 +22,7 @@ add_definitions(-DBOOST_PROGRAM_OPTIONS_DYN_LINK)
 co_add_tool(coNetperf SOURCES perf/netperf.cpp)
 co_add_tool(coNodeperf SOURCES perf/nodeperf.cpp)
 co_add_tool(coObjectperf SOURCES perf/objectperf.cpp)
+
+if (MPI_FOUND)
+  co_add_tool(coNetperf_mpi SOURCES perf/netperf_mpi.cpp)
+endif()
