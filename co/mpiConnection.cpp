@@ -200,6 +200,8 @@ void run()
                 _startData       = 0;
                 _bufferData      = 0;
             }
+
+            _notifier->set();
         }
 
         while( petition.bytes > 0 )
@@ -327,6 +329,9 @@ int64_t readSync(const void * /*buffer*/, int64_t /*bytes*/)
     int64_t received = 0;
     if( !_readyQ.timedPop( (const unsigned) co::Global::getTimeout(), received ) )
 	    return -1;
+
+	if( _bytesReceived == 0 )
+        _notifier->reset();
 
 	return received;
 }
@@ -791,8 +796,6 @@ int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
         _close();
         return -1;
     }
-
-    _impl->event->reset();
     return bytesRead;
 }
 
