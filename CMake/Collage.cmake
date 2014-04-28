@@ -1,5 +1,4 @@
 
-
 set(COLLAGE_PACKAGE_VERSION 1.1)
 set(COLLAGE_DEPENDS OFED UDT REQUIRED Boost Lunchbox)
 set(COLLAGE_DEB_DEPENDS librdmacm-dev libibverbs-dev librdmacm-dev libudt-dev
@@ -9,5 +8,5 @@ set(COLLAGE_PORT_DEPENDS boost)
 set(COLLAGE_BOOST_COMPONENTS
   "system regex date_time serialization program_options thread")
 set(COLLAGE_REPO_URL https://github.com/carlosduelo/Collage.git)
-set(COLLAGE_REPO_TAG mpi2)
+set(COLLAGE_REPO_TAG mpi)
 set(COLLAGE_FORCE_BUILD ${CI_BUILD})
