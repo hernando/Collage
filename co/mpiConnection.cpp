@@ -348,7 +348,6 @@ bool close()
     /** If someone is waitting signal. */
     _notifier->set();
 
-    std::cout<<"__________________> CLOSE"<<std::endl;
     return true;
 }
 
@@ -435,7 +434,6 @@ AsyncConnection(MPIConnection * detail, int32_t tag, EventConnectionPtr notifier
 
 void abort()
 {
-    std::cout<<"ABORT "<<std::endl;
     int rank = -1;
     if( MPI_SUCCESS != MPI_Ssend( &rank, 4,
                             MPI_BYTE, _detail->rank,
@@ -702,8 +700,6 @@ void MPIConnection::_close()
 
     /** Deregister tags. */
     tagManager.deregisterTag( _impl->tagRecv );
-
-    std::cout<<"CLOSE "<<this<<std::endl;
 
     _impl->event->close();
 
