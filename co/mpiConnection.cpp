@@ -30,6 +30,7 @@
 #include <boost/thread/thread.hpp>
 
 #include <set>
+#include <queue>
 
 namespace
 {
@@ -132,41 +133,33 @@ void run()
 	int64_t bytesRead = 0;
     while( 1 )
     {
-        /* Wait for new petitions, MPI_Probe is blocking but
-         * it is a cpu intensive function, so, a no active
-         * waiting is used. However, every 1 ms a Iprobe is
-         * executed for #38 issue.
+        /* Wait for new petitions.
+         * Warning!! MPI_Probe is is a cpu intensive
+         * function.
          *
          * Note from MPI documentation:
          * It is not necessary to receive a message immediately
          * after it has been probed for, and the same message
          * may be probed for several times before it is received.
          */
-		Petition petition;
         bytesRead = 0;
 
-        if( !_dispatcherQ.timedPop( 1 /*ms*/, petition ) )
+        if( _bytesReceived == 0 )
         {
-            if( _bytesReceived <= 0 )
+            MPI_Status status;
+            if( MPI_SUCCESS != MPI_Probe( MPI_ANY_SOURCE
+                                , _tag, MPI_COMM_WORLD
+                                , &status ) )
             {
-                int flag = -1;
-                MPI_Status status;
-                if( MPI_SUCCESS != MPI_Iprobe( MPI_ANY_SOURCE
-                                    , _tag, MPI_COMM_WORLD
-                                    , &flag, &status ) )
-                {
-                    LBERROR << "Error retrieving messages " << std::endl;
-                    bytesRead  = -1;
-                    break;
-                }
-
-                if( !flag )
-                    continue;
+                LBERROR << "Error retrieving messages " << std::endl;
+                bytesRead  = -1;
+                break;
             }
 
             _notifier->set();
-			continue;
         }
+
+		Petition petition = _dispatcherQ.pop();
 
         /** Check if not stopped and start MPI_Probe. */
         if( petition.bytes < 0)
@@ -200,8 +193,6 @@ void run()
                 _startData       = 0;
                 _bufferData      = 0;
             }
-
-            _notifier->set();
         }
 
         while( petition.bytes > 0 )
@@ -214,8 +205,6 @@ void run()
                 bytesRead  = -1;
                 break;
             }
-        
-			_notifier->set();
 
 			int32_t bytes = 0;
 
@@ -311,27 +300,23 @@ void run()
         if( bytesRead < 0 )
             break;
 
+        if( _bytesReceived == 0 )
+            _notifier->reset();
+
 		_readyQ.push( bytesRead );
     }
 
     LBASSERT( bytesRead < 0 )
-    _notifier->set();
     _readyQ.push( bytesRead );
 }
 
-void readNB(void * buffer, int64_t bytes)
+int64_t readSync(void * buffer, int64_t bytes)
 {
 	_dispatcherQ.push( Petition{ bytes, buffer } );
-}
 
-int64_t readSync(const void * /*buffer*/, int64_t /*bytes*/)
-{
     int64_t received = 0;
     if( !_readyQ.timedPop( (const unsigned) co::Global::getTimeout(), received ) )
 	    return -1;
-
-	if( _bytesReceived == 0 )
-        _notifier->reset();
 
 	return received;
 }
@@ -341,6 +326,9 @@ bool close()
     /* Send remote connetion EOF and close dispatcher.
      * If is closed for unknow reason send async.
      */
+
+	_dispatcherQ.push( Petition{ -1, 0 } );
+
     unsigned char eof = 0xFF;
     if( MPI_SUCCESS != MPI_Send( &eof, 1,
                             MPI_BYTE, _rank,
@@ -354,9 +342,13 @@ bool close()
     {
         LBWARN << "Error sending eof to remote " << std::endl;
     }
-	_dispatcherQ.push( Petition{ -1, 0 } );
+
     join();
 
+    /** If someone is waitting signal. */
+    _notifier->set();
+
+    std::cout<<"__________________> CLOSE"<<std::endl;
     return true;
 }
 
@@ -427,10 +419,6 @@ public:
 /* Due to accept a new connection when listenting is
  * an asynchronous process, this class perform the
  * accepting process in a different thread.
- * 
- * Note:
- * Race condition can occur on request and status.
- * Fix it.
  */
 class AsyncConnection : lunchbox::Thread
 {
@@ -447,6 +435,7 @@ AsyncConnection(MPIConnection * detail, int32_t tag, EventConnectionPtr notifier
 
 void abort()
 {
+    std::cout<<"ABORT "<<std::endl;
     int rank = -1;
     if( MPI_SUCCESS != MPI_Ssend( &rank, 4,
                             MPI_BYTE, _detail->rank,
@@ -472,13 +461,15 @@ MPIConnection * getImpl()
 
 void run()
 {
+    MPI_Request request;
+
     /* Recieve the peer rank. 
      * An asychronize function is used to allow abort an 
      * acceptNB process.
      */
     if( MPI_SUCCESS != MPI_Irecv( &_detail->peerRank, 1,
                             MPI_INT, MPI_ANY_SOURCE, _tag,
-                            MPI_COMM_WORLD, &_request) )
+                            MPI_COMM_WORLD, &request) )
     {
         LBWARN << "Could not start accepting a MPI connection, "
                << "closing connection." << std::endl;
@@ -488,7 +479,7 @@ void run()
     }
 
 	MPI_Status status;
-    if( MPI_SUCCESS !=  MPI_Wait( &_request, &status ) )
+    if( MPI_SUCCESS !=  MPI_Wait( &request, &status ) )
     {
         LBWARN << "Could not start accepting a MPI connection, "
                << "closing connection." << std::endl;
@@ -544,7 +535,6 @@ MPIConnection * _detail;
 int             _tag;
 bool            _status;
 
-MPI_Request         _request;
 EventConnectionPtr  _notifier;
 };
 
@@ -589,10 +579,10 @@ MPIConnection::~MPIConnection()
 
 co::Connection::Notifier MPIConnection::getNotifier() const
 {
-    if( isClosed())
-		return -1;
-	else
+    if( isConnected() || isListening() )
         return _impl->event->getNotifier();
+	else
+		return -1;
 }
 
 bool MPIConnection::connect()
@@ -713,6 +703,8 @@ void MPIConnection::_close()
     /** Deregister tags. */
     tagManager.deregisterTag( _impl->tagRecv );
 
+    std::cout<<"CLOSE "<<this<<std::endl;
+
     _impl->event->close();
 
     _setState( STATE_CLOSED );
@@ -777,11 +769,6 @@ ConnectionPtr MPIConnection::acceptSync()
     return newConnection;
 }
 
-void MPIConnection::readNB( void* buffer, const uint64_t bytes)
-{
-    _impl->dispatcher->readNB(buffer, bytes);
-}
-
 int64_t MPIConnection::readSync( void* buffer, const uint64_t bytes, const bool)
 {
     if( !isConnected() )
@@ -804,7 +791,7 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
     if( !isConnected() )
         return -1;
 
-    if( MPI_SUCCESS != MPI_Ssend( (void*)buffer, bytes,
+    if( MPI_SUCCESS != MPI_Send( (void*)buffer, bytes,
                             MPI_BYTE, _impl->peerRank,
                             _impl->tagSend, MPI_COMM_WORLD ) )
     {
