@@ -128,6 +128,141 @@ Dispatcher(int32_t rank, int32_t source, int32_t tag, int32_t tagClose, EventCon
 	    delete _bufferData;
 }
 
+int64_t _copyFromBuffer( void * buffer, int64_t bytes )
+{
+    LBASSERT( _bufferData != 0 );
+
+    uint64_t bytesRead = 0;
+
+    if( _bytesReceived > bytes )
+    {
+        memcpy( buffer, _startData, bytes );
+        _startData     += bytes;
+        _bytesReceived -= bytes;
+        bytesRead       = bytes;
+    }
+    else
+    {
+        memcpy( buffer, _startData, _bytesReceived );
+        bytesRead        = _bytesReceived;
+        delete _bufferData;
+        _bytesReceived   = 0;
+        _startData       = 0;
+        _bufferData      = 0;
+    }
+
+    return bytesRead;
+}
+
+int64_t _receiveMessage( void * buffer, int64_t bytes )
+{
+    int64_t bytesRead = 0;
+
+    while( bytes > 0 )
+    {
+        LBASSERT( _bytesReceived <= 0 );
+        MPI_Status status;
+        if( MPI_SUCCESS != MPI_Probe( MPI_ANY_SOURCE, _tag, MPI_COMM_WORLD, &status ) )
+        {
+            LBERROR << "Error retrieving messages " << std::endl;
+            bytesRead  = -1;
+            break;
+        }
+
+        int32_t bytesR = 0;
+
+        /** Consult number of bytes received. */
+        if( MPI_SUCCESS != MPI_Get_count( &status, MPI_BYTE, &bytesR) )
+        {
+            LBERROR << "Error retrieving messages " << std::endl;
+            bytesRead  = -1;
+            break;
+        }
+
+        if( bytesR <= bytes )
+        {
+            /* Receive the message, this call is not blocking due to the
+             * previous MPI_Probe call.
+             */
+            if( MPI_SUCCESS != MPI_Recv( buffer, bytesR, MPI_BYTE, status.MPI_SOURCE,
+                                            _tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) )
+            {
+                LBERROR << "Error retrieving messages " << std::endl;
+                bytesRead  = -1;
+                break;
+            }
+        
+            /** If the remote has closed the connection I should get a notification. */
+            if( bytesR == 1 &&
+                ((unsigned char*)buffer)[0] == 0xFF )
+            {
+                LBINFO << "Got EOF, closing connection" << std::endl;
+                bytesRead = -1;
+                break;
+            }
+
+            if( status.MPI_SOURCE == _source )
+            {
+                bytes -= bytesR;
+                buffer   = (unsigned char*)buffer + bytesR;
+                bytesRead      += bytesR;
+            }
+            else
+            {
+                LBWARN << "Warning!!! Received message form wrong source" <<std::endl;
+            }
+        }
+        else
+        {
+            LBASSERT( _bytesReceived == 0 );
+            LBASSERT( _bufferData == 0 );
+            _bufferData = new unsigned char[bytesR];
+            _startData = _bufferData;
+
+            /* Receive the message, this call is not blocking due to the
+             * previous MPI_Probe call.
+             */
+            if( MPI_SUCCESS != MPI_Recv( _bufferData, bytesR, MPI_BYTE, status.MPI_SOURCE,
+                                            _tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) )
+            {
+                LBERROR << "Error retrieving messages " << std::endl;
+                bytesRead  = -1;
+                break;
+            }
+
+            if( bytesR == 1 &&
+                _bufferData[0] == 0xFF )
+            {
+                LBINFO << "Got EOF, closing connection" << std::endl;
+                bytesRead = -1;
+                break;
+            }
+
+            if( status.MPI_SOURCE == _source )
+            {
+                _bytesReceived = bytesR;
+
+                memcpy( buffer, _startData, bytes );
+                _startData     += bytes;
+                bytesRead      += bytes;
+                _bytesReceived -= bytes;
+                bytes  = 0;
+            }
+            else
+            {
+                delete _bufferData;
+                _bufferData = 0;
+                _startData = 0;
+                _bytesReceived = 0;
+
+                LBWARN << "Warning!!! Received message form wrong source" <<std::endl;
+            }
+        }
+    }
+
+    return bytesRead;
+}
+
 void run()
 {
 	int64_t bytesRead = 0;
@@ -171,131 +306,17 @@ void run()
 
         /** There are bytes from last MPI_Recv */
         if( _bytesReceived > 0 )
-        {
-            LBASSERT( _bufferData != 0 );
+            bytesRead = _copyFromBuffer( petition.data, petition.bytes );
 
-            if( _bytesReceived > petition.bytes )
-            {
-                memcpy( petition.data, _startData, petition.bytes );
-                _startData     += petition.bytes;
-                _bytesReceived -= petition.bytes;
-                bytesRead       = petition.bytes;
-                petition.bytes  = 0;
-            }
-            else
-            {
-                memcpy( petition.data, _startData, _bytesReceived );
-                petition.data    = (unsigned char*)petition.data + _bytesReceived;
-                petition.bytes  -= _bytesReceived;
-                bytesRead        = _bytesReceived;
-                delete _bufferData;
-                _bytesReceived   = 0;
-                _startData       = 0;
-                _bufferData      = 0;
-            }
-        }
+        petition.bytes -= bytesRead;
+        petition.data    = (unsigned char*)petition.data + bytesRead;
 
-        while( petition.bytes > 0 )
-		{
-            LBASSERT( _bytesReceived <= 0 );
-			MPI_Status status;
-            if( MPI_SUCCESS != MPI_Probe( MPI_ANY_SOURCE, _tag, MPI_COMM_WORLD, &status ) )
-            {
-                LBERROR << "Error retrieving messages " << std::endl;
-                bytesRead  = -1;
-                break;
-            }
+        int64_t ret = _receiveMessage( petition.data, petition.bytes );
 
-			int32_t bytes = 0;
-
-			/** Consult number of bytes received. */
-			if( MPI_SUCCESS != MPI_Get_count( &status, MPI_BYTE, &bytes) )
-			{
-				LBERROR << "Error retrieving messages " << std::endl;
-				bytesRead  = -1;
-				break;
-			}
-
-			if( bytes <= petition.bytes )
-			{
-				/* Receive the message, this call is not blocking due to the
-				 * previous MPI_Probe call.
-				 */
-				if( MPI_SUCCESS != MPI_Recv( petition.data, bytes, MPI_BYTE, status.MPI_SOURCE,
-												_tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) )
-				{
-					LBERROR << "Error retrieving messages " << std::endl;
-				    bytesRead  = -1;
-					break;
-				}
-			
-				/** If the remote has closed the connection I should get a notification. */
-			    if( bytes == 1 &&
-				    ((unsigned char*)petition.data)[0] == 0xFF )
-				{
-					LBINFO << "Got EOF, closing connection" << std::endl;
-					bytesRead = -1;
-					break;
-				}
-
-                if( status.MPI_SOURCE == _source )
-                {
-                    petition.bytes -= bytes;
-                    petition.data   = (unsigned char*)petition.data + bytes;
-                    bytesRead      += bytes;
-                }
-                else
-                {
-                    LBWARN << "Warning!!! Received message form wrong source" <<std::endl;
-                }
-			}
-			else
-			{
-				LBASSERT( _bytesReceived == 0 );
-				LBASSERT( _bufferData == 0 );
-				_bufferData = new unsigned char[bytes];
-				_startData = _bufferData;
-
-				/* Receive the message, this call is not blocking due to the
-				 * previous MPI_Probe call.
-				 */
-				if( MPI_SUCCESS != MPI_Recv( _bufferData, bytes, MPI_BYTE, status.MPI_SOURCE,
-												_tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) )
-				{
-					LBERROR << "Error retrieving messages " << std::endl;
-				    bytesRead  = -1;
-					break;
-				}
-
-			    if( bytes == 1 &&
-				    _bufferData[0] == 0xFF )
-				{
-					LBINFO << "Got EOF, closing connection" << std::endl;
-					bytesRead = -1;
-					break;
-				}
-
-                if( status.MPI_SOURCE == _source )
-                {
-                    _bytesReceived = bytes;
-
-                    memcpy( petition.data, _startData, petition.bytes );
-                    _startData     += petition.bytes;
-                    bytesRead      += petition.bytes;
-                    _bytesReceived -= petition.bytes;
-                    petition.bytes  = 0;
-                }
-                else
-                {
-                    delete _bufferData;
-                    _bufferData = 0;
-                    _startData = 0;
-                    _bytesReceived = 0;
-
-                    LBWARN << "Warning!!! Received message form wrong source" <<std::endl;
-                }
-			}
-		}
+        if( ret < 0 )
+            bytesRead = -1;
+        else
+            bytesRead += ret;
 
         if( bytesRead < 0 )
             break;
