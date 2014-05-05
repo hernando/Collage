@@ -30,7 +30,6 @@
 #include <boost/thread/thread.hpp>
 
 #include <set>
-#include <queue>
 
 namespace
 {
@@ -109,23 +108,24 @@ class Dispatcher : lunchbox::Thread
 {
 
 public:
-Dispatcher(int32_t rank, int32_t source, int32_t tag, int32_t tagClose, EventConnectionPtr notifier) :
+Dispatcher( int32_t rank, int32_t source, int32_t tag,
+            int32_t tagClose, EventConnectionPtr notifier) :
       _rank( rank )
     , _source( source )
     , _tag( tag )
     , _tagClose( tagClose )
     , _notifier( notifier )
-	, _bufferData( 0 )
-	, _startData( 0 )
-	, _bytesReceived( 0 )
+    , _bufferData( 0 )
+    , _startData( 0 )
+    , _bytesReceived( 0 )
 {
     start();
 }
 
 ~Dispatcher()
 {
-	if( _bufferData != 0)
-	    delete _bufferData;
+    if( _bufferData != 0)
+        delete _bufferData;
 }
 
 int64_t _copyFromBuffer( void * buffer, int64_t bytes )
@@ -162,7 +162,8 @@ int64_t _receiveMessage( void * buffer, int64_t bytes )
     {
         LBASSERT( _bytesReceived <= 0 );
         MPI_Status status;
-        if( MPI_SUCCESS != MPI_Probe( MPI_ANY_SOURCE, _tag, MPI_COMM_WORLD, &status ) )
+        if( MPI_SUCCESS != MPI_Probe( MPI_ANY_SOURCE
+                                , _tag, MPI_COMM_WORLD, &status ) )
         {
             LBERROR << "Error retrieving messages " << std::endl;
             bytesRead  = -1;
@@ -192,7 +193,9 @@ int64_t _receiveMessage( void * buffer, int64_t bytes )
                 break;
             }
         
-            /** If the remote has closed the connection I should get a notification. */
+            /* If the remote has closed the connection I should get
+             * a notification.
+             */
             if( bytesR == 1 &&
                 ((unsigned char*)buffer)[0] == 0xFF )
             {
@@ -222,8 +225,10 @@ int64_t _receiveMessage( void * buffer, int64_t bytes )
             /* Receive the message, this call is not blocking due to the
              * previous MPI_Probe call.
              */
-            if( MPI_SUCCESS != MPI_Recv( _bufferData, bytesR, MPI_BYTE, status.MPI_SOURCE,
-                                            _tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) )
+            if( MPI_SUCCESS != MPI_Recv( _bufferData, bytesR, MPI_BYTE
+                                            , status.MPI_SOURCE, _tag
+                                            , MPI_COMM_WORLD
+                                            , MPI_STATUS_IGNORE ) )
             {
                 LBERROR << "Error retrieving messages " << std::endl;
                 bytesRead  = -1;
@@ -255,7 +260,8 @@ int64_t _receiveMessage( void * buffer, int64_t bytes )
                 _startData = 0;
                 _bytesReceived = 0;
 
-                LBWARN << "Warning!!! Received message form wrong source" <<std::endl;
+                LBWARN << "Warning!!! Received message form "
+                       << "wrong source" <<std::endl;
             }
         }
     }
@@ -265,7 +271,7 @@ int64_t _receiveMessage( void * buffer, int64_t bytes )
 
 void run()
 {
-	int64_t bytesRead = 0;
+    int64_t bytesRead = 0;
     while( 1 )
     {
         /* Wait for new petitions.
@@ -294,7 +300,7 @@ void run()
             _notifier->set();
         }
 
-		Petition petition = _dispatcherQ.pop();
+        Petition petition = _dispatcherQ.pop();
 
         /** Check if not stopped and start MPI_Probe. */
         if( petition.bytes < 0)
@@ -324,7 +330,7 @@ void run()
         if( _bytesReceived == 0 )
             _notifier->reset();
 
-		_readyQ.push( bytesRead );
+        _readyQ.push( bytesRead );
     }
 
     LBASSERT( bytesRead < 0 )
@@ -333,13 +339,14 @@ void run()
 
 int64_t readSync(void * buffer, int64_t bytes)
 {
-	_dispatcherQ.push( Petition{ bytes, buffer } );
+    _dispatcherQ.push( Petition{ bytes, buffer } );
 
     int64_t received = 0;
-    if( !_readyQ.timedPop( (const unsigned) co::Global::getTimeout(), received ) )
-	    return -1;
+    if( !_readyQ.timedPop(  (const unsigned) co::Global::getTimeout()
+                            , received ) )
+        return -1;
 
-	return received;
+    return received;
 }
 
 bool close()
@@ -348,7 +355,7 @@ bool close()
      * If is closed for unknow reason send async.
      */
 
-	_dispatcherQ.push( Petition{ -1, 0 } );
+    _dispatcherQ.push( Petition{ -1, 0 } );
 
     unsigned char eof = 0xFF;
     if( MPI_SUCCESS != MPI_Send( &eof, 1,
@@ -444,7 +451,8 @@ class AsyncConnection : lunchbox::Thread
 {
 public:
 
-AsyncConnection(MPIConnection * detail, int32_t tag, EventConnectionPtr notifier) :
+AsyncConnection(    MPIConnection * detail, int32_t tag
+                    , EventConnectionPtr notifier) :
       _detail( detail )
     , _tag( tag )
     , _status( true )
@@ -497,7 +505,7 @@ void run()
         return;
     }
 
-	MPI_Status status;
+    MPI_Status status;
     if( MPI_SUCCESS !=  MPI_Wait( &request, &status ) )
     {
         LBWARN << "Could not start accepting a MPI connection, "
@@ -508,13 +516,13 @@ void run()
     }
 
     if( _detail->peerRank < 0 )
-	{
-		LBINFO << "Error accepting connection from rank "
-		       << _detail->peerRank << std::endl;
-		_status = false;
+    {
+        LBINFO << "Error accepting connection from rank "
+               << _detail->peerRank << std::endl;
+        _status = false;
         _notifier->set();
-		return;
-	}
+        return;
+    }
 
     _detail->tagRecv = ( int32_t )tagManager.getTag( );
 
@@ -600,8 +608,8 @@ co::Connection::Notifier MPIConnection::getNotifier() const
 {
     if( isConnected() || isListening() )
         return _impl->event->getNotifier();
-	else
-		return -1;
+    else
+        return -1;
 }
 
 bool MPIConnection::connect()
@@ -683,7 +691,8 @@ bool MPIConnection::listen()
     {
         LBWARN << "Tag " << tag << " is already register." << std::endl;
         if( isListening( ) )
-            LBINFO << "Probably, listen has already called before." << std::endl;
+            LBINFO << "Probably, listen has already called before."
+                   << std::endl;
         _close();
         return false;
     }
