@@ -72,7 +72,7 @@ bool _init( const int argc, char** argv )
 
 		Here, the MPI library is initialized and requested for MPI_THREAD_MULTIPLE 
 		level of thread support. To make the library safe, if the thread support is 
-		not at least MPI_THREAD_FUNNELED, MPI communications will not be allowed.
+		not at least MPI_THREAD_SERIALIZED, MPI communications will not be allowed.
 	*/
 
 	int threadSupportProvided = -1;

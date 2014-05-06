@@ -41,7 +41,7 @@ namespace detail { class MPIConnection; }
  * During the initialization Collage will request the appropriate
  * thread support but if the MPI library does not provide it, MPI
  * connections will be disabled. If the application uses a MPI
- * connection when disabled, the library will abort.
+ * connection when disabled, the connection should not be created.
  */
 class MPIConnection : public Connection
 {

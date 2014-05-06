@@ -285,6 +285,7 @@ void run()
          */
         bytesRead = 0;
 
+        /** Waiting for new data if there is not available. */
         if( _bytesReceived == 0 )
         {
             MPI_Status status;
@@ -300,6 +301,7 @@ void run()
             _notifier->set();
         }
 
+        /** Wait for petition, the push is performed in readSync. */
         Petition petition = _dispatcherQ.pop();
 
         /** Check if not stopped and start MPI_Probe. */
@@ -330,6 +332,7 @@ void run()
         if( _bytesReceived == 0 )
             _notifier->reset();
 
+        /** Notify the petition has been finished. */
         _readyQ.push( bytesRead );
     }
 
@@ -463,6 +466,7 @@ AsyncConnection(    MPIConnection * detail, int32_t tag
 
 void abort()
 {
+    /** Send a no rank to wake the thread up. */
     int rank = -1;
     if( MPI_SUCCESS != MPI_Ssend( &rank, 4,
                             MPI_BYTE, _detail->rank,
@@ -491,8 +495,8 @@ void run()
     MPI_Request request;
 
     /* Recieve the peer rank. 
-     * An asychronize function is used to allow abort an 
-     * acceptNB process.
+     * An asychronize function is used to allow future
+     * sleep and wait due to save cpu.
      */
     if( MPI_SUCCESS != MPI_Irecv( &_detail->peerRank, 1,
                             MPI_INT, MPI_ANY_SOURCE, _tag,
@@ -593,10 +597,7 @@ MPIConnection::~MPIConnection()
     _close();
 
     if( _impl->asyncConnection != 0 )
-    {
-        //_impl->asyncConnection->abort();
         delete _impl->asyncConnection;
-    }
 
     if( _impl->dispatcher != 0 )
         delete _impl->dispatcher;
@@ -708,11 +709,6 @@ bool MPIConnection::listen()
     return true;
 }
 
-/* The close can occur for two reasons:
- * - Application call MPIConnection::close(), in this case
- * the remote peer should be notified by sending an EOF.
- * - Connection has been destroyed.
- */ 
 void MPIConnection::_close()
 {
     if( isClosed() )

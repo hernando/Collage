@@ -43,8 +43,10 @@ namespace co
 		/** @return true if MPI communications are allowed, false otherwise @version 1.2 */
 		CO_API static bool isMPIAllowed();
 
+        /** @return the rank of the process that calls it @version 1.2 */
         CO_API static int getMPIRank();
 
+        /** @return the number of processes involved @ version 1.2 */
         CO_API static int getMPISize();
 		#endif
 
