@@ -165,9 +165,6 @@ int main( const int argc, char* argv[] )
     const bool isClient = !isServer && vm.count( "client" );
 
     co::ConnectionDescriptionPtr description = new co::ConnectionDescription;
-    description->type = co::CONNECTIONTYPE_MPI;
-    description->rank = 0;
-    description->port = 1234;
     if( isServer )
         TEST( description->fromString( param ));
     if( isClient )

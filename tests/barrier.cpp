@@ -37,8 +37,6 @@ public:
     {
         setName( "Master" );
         co::ConnectionDescriptionPtr desc = new co::ConnectionDescription;
-        desc->type = co::CONNECTIONTYPE_MPI;
-        desc->rank = 0;
         desc->port = _port;
 
         co::LocalNodePtr node = new co::LocalNode;
@@ -71,8 +69,6 @@ public:
     {
         setName( "Slave" );
         co::ConnectionDescriptionPtr desc = new co::ConnectionDescription;
-        desc->type = co::CONNECTIONTYPE_MPI;
-        desc->rank = 0;
         desc->port = _port + 1;
 
         co::LocalNodePtr node = new co::LocalNode;
@@ -82,8 +78,6 @@ public:
         co::NodePtr server = new co::Node;
         co::ConnectionDescriptionPtr serverDesc =
             new co::ConnectionDescription;
-        serverDesc->type = co::CONNECTIONTYPE_MPI;
-        serverDesc->rank = 0;
         serverDesc->port = _port;
         server->addConnectionDescription( serverDesc );
 

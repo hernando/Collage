@@ -108,8 +108,7 @@ int main( int argc, char **argv )
     co::ConnectionDescriptionPtr connDesc =
         new co::ConnectionDescription;
 
-    connDesc->type = co::CONNECTIONTYPE_MPI;
-    connDesc->rank = 0;
+    connDesc->type = co::CONNECTIONTYPE_TCPIP;
     connDesc->port = port;
     connDesc->setHostname( "localhost" );
 
@@ -120,9 +119,7 @@ int main( int argc, char **argv )
     serverProxy->addConnectionDescription( connDesc );
 
     connDesc = new co::ConnectionDescription;
-    connDesc->type = co::CONNECTIONTYPE_MPI;
-    connDesc->port = port + 1;
-    connDesc->rank = 0;
+    connDesc->type = co::CONNECTIONTYPE_TCPIP;
     connDesc->setHostname( "localhost" );
 
     co::LocalNodePtr client = new co::LocalNode;

@@ -128,9 +128,6 @@ int main( int argc, char **argv )
 
     co::LocalNodePtr node = new co::LocalNode;
     co::ConnectionDescriptionPtr desc = new co::ConnectionDescription;
-    desc->type = co::CONNECTIONTYPE_MPI;
-    desc->rank = 0;
-    desc->port = 1234;
     node->addConnectionDescription( desc );
     TEST( node->listen( ));
 
