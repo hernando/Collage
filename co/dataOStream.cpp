@@ -1,5 +1,5 @@
 
-/* Copyright (c) 2007-2013, Stefan Eilemann <eile@equalizergraphics.com>
+/* Copyright (c) 2007-2014, Stefan Eilemann <eile@equalizergraphics.com>
  *                    2010, Cedric Stalder <cedric.stalder@gmail.com>
  *               2011-2012, Daniel Nachbaur <danielnachbaur@gmail.com>
  *
@@ -122,7 +122,7 @@ public:
     {
         if( state == STATE_UNCOMPRESSED || state == STATE_UNCOMPRESSIBLE )
             return 1;
-        return compressor.getResult().getSize();
+        return compressor.getResult().chunks.size();
     }
 
 
@@ -191,7 +191,7 @@ DataOStream::DataOStream()
 {}
 
 DataOStream::DataOStream( DataOStream& rhs )
-    : lunchbox::NonCopyable()
+    : boost::noncopyable()
     , _impl( new detail::DataOStream( *rhs._impl ))
 {
     _setupConnections( rhs.getConnections( ));
@@ -431,7 +431,7 @@ void DataOStream::sendBody( ConnectionPtr connection, const uint64_t dataSize )
 #ifdef CO_INSTRUMENT_DATAOSTREAM
     nBytesSent += _impl->buffer.getSize();
 #endif
-    const uint32_t nChunks = _impl->compressor.getResult().getSize();
+    const uint32_t nChunks = _impl->compressor.getResult().chunks.size();
     uint64_t* chunkSizes = static_cast< uint64_t* >
                                ( alloca (nChunks * sizeof( uint64_t )));
     void** chunks = static_cast< void ** >
