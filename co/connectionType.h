@@ -36,7 +36,7 @@ namespace co
         CONNECTIONTYPE_IB,        //!< @deprecated Win XP Infiniband RDMA
         CONNECTIONTYPE_RDMA,      //!< Infiniband RDMA CM
         CONNECTIONTYPE_UDT,       //!< UDT connection
-        CONNECTIONTYPE_MPI,       //!< MPI connection 
+        CONNECTIONTYPE_MPI,       //!< MPI connection
         CONNECTIONTYPE_MULTICAST = 0x100, //!< @internal MC types after this:
         CONNECTIONTYPE_RSP        //!< UDP-based reliable stream protocol
     };

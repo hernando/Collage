@@ -65,7 +65,7 @@ bool _init( const int argc, char** argv )
         https://www.open-mpi.org/faq/?category=supported-systems#thread-support
         https://www.open-mpi.org/doc/v1.4/man3/MPI_Init_thread.3.php
 
-        MPI_Init_thread and MPI_Finalize: 
+        MPI_Init_thread and MPI_Finalize:
         Should only be called once.
         Should only be called by a single thread
         Both should be called by the same thread, known as the main thread.

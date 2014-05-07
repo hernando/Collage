@@ -40,7 +40,7 @@ typedef lunchbox::RefPtr< co::EventConnection > EventConnectionPtr;
  * Every connection inside a process has a unique MPI tag.
  * This class allow to register a MPI tag and get a new unique.
  *
- * Due to, the tag is defined by a 16 bits integer on 
+ * Due to, the tag is defined by a 16 bits integer on
  * ConnectionDescription ( the real name is port but it
  * is reused for this purpuse ). The listeners always
  * use tags [ 0, 65535 ] and others [ 65536, 2147483648 ].
@@ -162,8 +162,10 @@ int64_t _receiveMessage( void * buffer, int64_t bytes )
     {
         LBASSERT( _bytesReceived <= 0 );
         MPI_Status status;
-        if( MPI_SUCCESS != MPI_Probe( MPI_ANY_SOURCE
-                                , _tag, MPI_COMM_WORLD, &status ) )
+        if( MPI_SUCCESS != MPI_Probe( MPI_ANY_SOURCE,
+                                        _tag,
+                                        MPI_COMM_WORLD,
+                                        &status ) )
         {
             LBERROR << "Error retrieving messages " << std::endl;
             bytesRead  = -1;
@@ -185,14 +187,17 @@ int64_t _receiveMessage( void * buffer, int64_t bytes )
             /* Receive the message, this call is not blocking due to the
              * previous MPI_Probe call.
              */
-            if( MPI_SUCCESS != MPI_Recv( buffer, bytesR, MPI_BYTE, status.MPI_SOURCE,
-                                            _tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) )
+            if( MPI_SUCCESS != MPI_Recv( buffer, bytesR, MPI_BYTE,
+                                         status.MPI_SOURCE,
+                                         _tag,
+                                         MPI_COMM_WORLD,
+                                         MPI_STATUS_IGNORE ) )
             {
                 LBERROR << "Error retrieving messages " << std::endl;
                 bytesRead  = -1;
                 break;
             }
-        
+
             /* If the remote has closed the connection I should get
              * a notification.
              */
@@ -212,7 +217,8 @@ int64_t _receiveMessage( void * buffer, int64_t bytes )
             }
             else
             {
-                LBWARN << "Warning!!! Received message form wrong source" <<std::endl;
+                LBWARN << "Warning!!! Received message form wrong source"
+                       << std::endl;
             }
         }
         else
@@ -225,10 +231,11 @@ int64_t _receiveMessage( void * buffer, int64_t bytes )
             /* Receive the message, this call is not blocking due to the
              * previous MPI_Probe call.
              */
-            if( MPI_SUCCESS != MPI_Recv( _bufferData, bytesR, MPI_BYTE
-                                            , status.MPI_SOURCE, _tag
-                                            , MPI_COMM_WORLD
-                                            , MPI_STATUS_IGNORE ) )
+            if( MPI_SUCCESS != MPI_Recv( _bufferData, bytesR, MPI_BYTE,
+                                            status.MPI_SOURCE,
+                                            _tag,
+                                            MPI_COMM_WORLD,
+                                            MPI_STATUS_IGNORE ) )
             {
                 LBERROR << "Error retrieving messages " << std::endl;
                 bytesRead  = -1;
@@ -289,9 +296,10 @@ void run()
         if( _bytesReceived == 0 )
         {
             MPI_Status status;
-            if( MPI_SUCCESS != MPI_Probe( MPI_ANY_SOURCE
-                                , _tag, MPI_COMM_WORLD
-                                , &status ) )
+            if( MPI_SUCCESS != MPI_Probe( MPI_ANY_SOURCE,
+                                            _tag,
+                                            MPI_COMM_WORLD,
+                                            &status ) )
             {
                 LBERROR << "Error retrieving messages " << std::endl;
                 bytesRead  = -1;
@@ -362,14 +370,18 @@ bool close()
 
     unsigned char eof = 0xFF;
     if( MPI_SUCCESS != MPI_Send( &eof, 1,
-                            MPI_BYTE, _rank,
-                            _tag, MPI_COMM_WORLD ) )
+                                    MPI_BYTE,
+                                    _rank,
+                                    _tag,
+                                    MPI_COMM_WORLD ) )
     {
         LBWARN << "Error sending eof to remote " << std::endl;
     }
     if( MPI_SUCCESS != MPI_Send( &eof, 1,
-                            MPI_BYTE, _source,
-                            _tagClose, MPI_COMM_WORLD ) )
+                                    MPI_BYTE,
+                                    _source,
+                                    _tagClose,
+                                    MPI_COMM_WORLD ) )
     {
         LBWARN << "Error sending eof to remote " << std::endl;
     }
@@ -454,8 +466,8 @@ class AsyncConnection : lunchbox::Thread
 {
 public:
 
-AsyncConnection(    MPIConnection * detail, int32_t tag
-                    , EventConnectionPtr notifier) :
+AsyncConnection( MPIConnection * detail, int32_t tag,
+                    EventConnectionPtr notifier) :
       _detail( detail )
     , _tag( tag )
     , _status( true )
@@ -469,10 +481,12 @@ void abort()
     /** Send a no rank to wake the thread up. */
     int rank = -1;
     if( MPI_SUCCESS != MPI_Ssend( &rank, 4,
-                            MPI_BYTE, _detail->rank,
-                            _tag, MPI_COMM_WORLD ) )
+                                    MPI_BYTE,
+                                    _detail->rank,
+                                    _tag,
+                                    MPI_COMM_WORLD ) )
     {
-        LBWARN << "Error sending MPI tag to peer in a MPI connection." 
+        LBWARN << "Error sending MPI tag to peer in a MPI connection."
                << std::endl;
         return;
     }
@@ -494,13 +508,16 @@ void run()
 {
     MPI_Request request;
 
-    /* Recieve the peer rank. 
+    /* Recieve the peer rank.
      * An asychronize function is used to allow future
      * sleep and wait due to save cpu.
      */
     if( MPI_SUCCESS != MPI_Irecv( &_detail->peerRank, 1,
-                            MPI_INT, MPI_ANY_SOURCE, _tag,
-                            MPI_COMM_WORLD, &request) )
+                                    MPI_INT,
+                                    MPI_ANY_SOURCE,
+                                    _tag,
+                                    MPI_COMM_WORLD,
+                                    &request ) )
     {
         LBWARN << "Could not start accepting a MPI connection, "
                << "closing connection." << std::endl;
@@ -532,10 +549,12 @@ void run()
 
     // Send Tag
     if( MPI_SUCCESS != MPI_Ssend( &_detail->tagRecv, 4,
-                            MPI_BYTE, _detail->peerRank,
-                            _tag, MPI_COMM_WORLD ) )
+                                    MPI_BYTE,
+                                    _detail->peerRank,
+                                    _tag,
+                                    MPI_COMM_WORLD ) )
     {
-        LBWARN << "Error sending MPI tag to peer in a MPI connection." 
+        LBWARN << "Error sending MPI tag to peer in a MPI connection."
                << std::endl;
         _status = false;
         _notifier->set();
@@ -544,10 +563,13 @@ void run()
 
     /** Receive the peer tag. */
     if( MPI_SUCCESS != MPI_Recv( &_detail->tagSend, 4,
-                            MPI_BYTE, _detail->peerRank,
-                            _tag, MPI_COMM_WORLD, NULL ) )
+                                    MPI_BYTE,
+                                    _detail->peerRank,
+                                    _tag,
+                                    MPI_COMM_WORLD,
+                                    NULL ) )
     {
-        LBWARN << "Could not receive MPI tag from " 
+        LBWARN << "Could not receive MPI tag from "
                << _detail->peerRank << " process." << std::endl;
         _status = false;
         _notifier->set();
@@ -628,8 +650,10 @@ bool MPIConnection::connect()
 
     /** To connect first send the rank. */
     if( MPI_SUCCESS != MPI_Ssend( &_impl->rank, 1,
-                            MPI_INT, _impl->peerRank,
-                            cTag, MPI_COMM_WORLD ) )
+                                    MPI_INT,
+                                    _impl->peerRank,
+                                    cTag,
+                                    MPI_COMM_WORLD ) )
     {
         LBWARN << "Could not connect to "
                << _impl->peerRank << " process." << std::endl;
@@ -641,8 +665,10 @@ bool MPIConnection::connect()
      * the MPI tag used for send.
      */
     if( MPI_SUCCESS != MPI_Recv( &_impl->tagSend, 4,
-                            MPI_BYTE, _impl->peerRank,
-                            cTag, MPI_COMM_WORLD, NULL ) )
+                                    MPI_BYTE,
+                                    _impl->peerRank,
+                                    cTag,
+                                    MPI_COMM_WORLD, NULL ) )
     {
         LBWARN << "Could not receive MPI tag from "
                << _impl->peerRank << " process." << std::endl;
@@ -655,9 +681,12 @@ bool MPIConnection::connect()
 
     /** Get a new tag to receive and send it. */
     _impl->tagRecv = ( int32_t )tagManager.getTag( );
+
     if( MPI_SUCCESS != MPI_Ssend( &_impl->tagRecv, 4,
-                            MPI_BYTE, _impl->peerRank,
-                            cTag, MPI_COMM_WORLD ) )
+                                    MPI_BYTE,
+                                    _impl->peerRank,
+                                    cTag,
+                                    MPI_COMM_WORLD ) )
     {
         LBWARN << "Could not connect to "
                << _impl->peerRank << " process." << std::endl;
@@ -666,11 +695,11 @@ bool MPIConnection::connect()
     }
 
     /** Creating the dispatcher. */
-    _impl->dispatcher = new Dispatcher( _impl->rank
-                                ,_impl->peerRank
-                                ,_impl->tagRecv
-                                ,_impl->tagSend
-                                ,_impl->event );
+    _impl->dispatcher = new Dispatcher( _impl->rank,
+                                            _impl->peerRank,
+                                            _impl->tagRecv,
+                                            _impl->tagSend,
+                                            _impl->event );
 
     _setState( STATE_CONNECTED );
 
@@ -701,7 +730,7 @@ bool MPIConnection::listen()
     /** Set tag for listening. */
     _impl->tagRecv = tag;
 
-    LBINFO << "MPI Connection, rank " << _impl->rank 
+    LBINFO << "MPI Connection, rank " << _impl->rank
            << " listening on tag " << _impl->tagRecv << std::endl;
 
     _setState( STATE_LISTENING );
@@ -747,9 +776,9 @@ void MPIConnection::acceptNB()
 
     detail::MPIConnection * newImpl = new detail::MPIConnection( );
 
-    _impl->asyncConnection = new detail::AsyncConnection( newImpl
-                                            ,_impl->tagRecv
-                                            ,_impl->event);
+    _impl->asyncConnection = new detail::AsyncConnection( newImpl,
+                                                            _impl->tagRecv,
+                                                            _impl->event);
 
 }
 
@@ -774,11 +803,11 @@ ConnectionPtr MPIConnection::acceptSync()
     _impl->asyncConnection = 0;
 
     /** Create dispatcher of new connection. */
-    newImpl->dispatcher = new Dispatcher( newImpl->rank
-                                    ,newImpl->peerRank
-                                    ,newImpl->tagRecv
-                                    ,newImpl->tagSend
-                                    ,newImpl->event );
+    newImpl->dispatcher = new Dispatcher( newImpl->rank,
+                                            newImpl->peerRank,
+                                            newImpl->tagRecv,
+                                            newImpl->tagSend,
+                                            newImpl->event );
 
     MPIConnection* newConnection = new MPIConnection( newImpl );
     newConnection->_setState( STATE_CONNECTED );
@@ -814,8 +843,10 @@ int64_t MPIConnection::write( const void* buffer, const uint64_t bytes )
         return -1;
 
     if( MPI_SUCCESS != MPI_Ssend( (void*)buffer, bytes,
-                            MPI_BYTE, _impl->peerRank,
-                            _impl->tagSend, MPI_COMM_WORLD ) )
+                                    MPI_BYTE,
+                                    _impl->peerRank,
+                                    _impl->tagSend,
+                                    MPI_COMM_WORLD ) )
     {
         LBWARN << "Write error, closing connection" << std::endl;
         close();
