@@ -187,10 +187,10 @@ ConnectionPtr Connection::create( ConnectionDescriptionPtr description )
              * Future: fix it.
              */
             if( co::Global::isMPIAllowed( ) )
+            {
                 connection = new MPIConnection;
-            else
-                return 0;
-            break;
+                break;
+            }
 #endif
 
         default:
