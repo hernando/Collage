@@ -222,12 +222,12 @@ bool _mpiAllowed = false;
 
 void Global::allowMPI()
 {
-	_mpiAllowed = true;
+    _mpiAllowed = true;
 }
 
 bool Global::isMPIAllowed()
 {
-	return _mpiAllowed;
+    return _mpiAllowed;
 }
 
 int Global::getMPIRank()
