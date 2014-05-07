@@ -100,8 +100,8 @@ int main( int argc, char **argv )
 
     if( co::Global::getMPIRank() == 0 )
     {
-        lunchbox::RefPtr< Server > server = new Server(
-                                            co::Global::getMPISize() * NMESSAGES );
+        lunchbox::RefPtr< Server > server;
+        server = new Server( co::Global::getMPISize() * NMESSAGES );
         co::ConnectionDescriptionPtr connDesc = new co::ConnectionDescription;
         connDesc->type = co::CONNECTIONTYPE_MPI;
         connDesc->port = port;
@@ -112,7 +112,7 @@ int main( int argc, char **argv )
         TEST( server->listen( ));
 
         MPI_Barrier(MPI_COMM_WORLD);
-        
+
         TEST( server->close( ));
         TESTINFO( server->getRefCount() == 1, server->getRefCount( ));
     }
