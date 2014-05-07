@@ -58,7 +58,7 @@ ConnectionDescription::ConnectionDescription( std::string& data )
         : type( CONNECTIONTYPE_TCPIP )
         , bandwidth( 0 )
         , port( 0 )
-		, rank( -1 )
+        , rank( -1 )
         , filename( "default" )
 {
     fromString( data );
@@ -298,8 +298,8 @@ std::ostream& operator << ( std::ostream& os,
     if( desc.port != 0 )
         os << "port          " << desc.port << std::endl;
 
-	if( desc.rank >= 0 )
-		os << "rank          " << desc.rank << std::endl;
+    if( desc.rank >= 0 )
+        os << "rank          " << desc.rank << std::endl;
 
     if( !desc.getFilename().empty( ))
         os << "filename      \"" << desc.getFilename() << "\"" << std::endl;
