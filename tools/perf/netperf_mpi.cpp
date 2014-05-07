@@ -157,7 +157,7 @@ public:
     bool init() override
         {
             LBCHECK( _connection->listen( ));
-	
+
             _connection->acceptNB();
             _connectionSet.addConnection( _connection );
 
@@ -308,7 +308,7 @@ private:
 int main( int argc, char **argv )
 {
     LBCHECK( co::init( argc, argv ));
-	
+
     /** Check at least more than one MPI process. */
     if( co::Global::getMPISize() == 1 )
     {
@@ -361,16 +361,16 @@ int main( int argc, char **argv )
         // evaluate parsed arguments
         if( showHelp )
         {
-	        if( co::Global::getMPIRank() == 0 )
+            if( co::Global::getMPIRank() == 0 )
                 std::cout << options << std::endl;
             co::exit();
             return EXIT_SUCCESS;
         }
-    
-		/** Rank 0 is the server. */
-	    if( co::Global::getMPIRank() == 0 )
+
+        /** Rank 0 is the server. */
+        if( co::Global::getMPIRank() == 0 )
             isClient = false;
-		else
+        else
             isClient = true;
     }
     catch( std::exception& exception )
@@ -448,7 +448,7 @@ int main( int argc, char **argv )
 
         delete selector;
 
-		connection->close();
+        connection->close();
     }
 
 
