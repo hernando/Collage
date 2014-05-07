@@ -54,7 +54,7 @@ TagManager() :
 {
 }
 
-bool registerTag(uint32_t tag)
+bool registerTag(const uint32_t tag)
 {
     lunchbox::ScopedMutex< > mutex( _lock );
 
@@ -66,7 +66,7 @@ bool registerTag(uint32_t tag)
     return true;
 }
 
-void deregisterTag(uint32_t tag)
+void deregisterTag(const uint32_t tag)
 {
     lunchbox::ScopedMutex< > mutex( _lock );
 
@@ -108,8 +108,8 @@ class Dispatcher : lunchbox::Thread
 {
 
 public:
-Dispatcher( int32_t rank, int32_t source, int32_t tag,
-            int32_t tagClose, EventConnectionPtr notifier) :
+Dispatcher( const int32_t rank, const int32_t source, const int32_t tag,
+            const int32_t tagClose, EventConnectionPtr notifier) :
       _rank( rank )
     , _source( source )
     , _tag( tag )
@@ -128,7 +128,7 @@ Dispatcher( int32_t rank, int32_t source, int32_t tag,
         delete _bufferData;
 }
 
-int64_t _copyFromBuffer( void * buffer, int64_t bytes )
+int64_t _copyFromBuffer( void * buffer, const int64_t bytes )
 {
     LBASSERT( _bufferData != 0 );
 
@@ -348,7 +348,7 @@ void run()
     _readyQ.push( bytesRead );
 }
 
-int64_t readSync(void * buffer, int64_t bytes)
+int64_t readSync(void * buffer, const int64_t bytes)
 {
     _dispatcherQ.push( Petition{ bytes, buffer } );
 
@@ -396,10 +396,10 @@ bool close()
 
 private:
 
-int32_t _rank;
-int32_t _source;
-int32_t _tag;
-int32_t _tagClose;
+const int32_t _rank;
+const int32_t _source;
+const int32_t _tag;
+const int32_t _tagClose;
 
 EventConnectionPtr _notifier;
 
@@ -466,7 +466,7 @@ class AsyncConnection : lunchbox::Thread
 {
 public:
 
-AsyncConnection( MPIConnection * detail, int32_t tag,
+AsyncConnection( MPIConnection * detail, const int32_t tag,
                     EventConnectionPtr notifier) :
       _detail( detail )
     , _tag( tag )
@@ -585,7 +585,7 @@ void run()
 
 private:
 MPIConnection * _detail;
-int             _tag;
+const int32_t   _tag;
 bool            _status;
 
 EventConnectionPtr  _notifier;
@@ -646,7 +646,7 @@ bool MPIConnection::connect()
 
     ConnectionDescriptionPtr description = _getDescription( );
     _impl->peerRank = description->rank;
-    int32_t cTag = description->port;
+    const int32_t cTag = description->port;
 
     /** To connect first send the rank. */
     if( MPI_SUCCESS != MPI_Ssend( &_impl->rank, 1,
@@ -714,7 +714,7 @@ bool MPIConnection::listen()
     if( !isClosed())
         return false;
 
-    int32_t tag = getDescription()->port;
+    const int32_t tag = getDescription()->port;
 
     /** Register tag. */
     if( !tagManager.registerTag( tag ) )
