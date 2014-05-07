@@ -58,13 +58,13 @@ int main( int argc, char **argv )
         co::exit();
         return EXIT_SUCCESS;
     }
-            
+
     for( size_t i = 0; types[i] != co::CONNECTIONTYPE_NONE; ++i )
     {
         co::ConnectionDescriptionPtr desc = new co::ConnectionDescription;
         desc->type = types[i];
-        desc->rank = 0; 
-        desc->port = 2048; 
+        desc->rank = 0;
+        desc->port = 2048;
         desc->setHostname( "127.0.0.1" );
 
         lunchbox::Clock clock;
@@ -78,7 +78,7 @@ int main( int argc, char **argv )
                 continue;
             }
 
-			MPI_Barrier( MPI_COMM_WORLD );
+            MPI_Barrier( MPI_COMM_WORLD );
 
             const bool listening = listener->listen();
             if( !listening )
@@ -87,7 +87,7 @@ int main( int argc, char **argv )
             TESTINFO( listening, desc );
             listener->acceptNB();
             co::ConnectionPtr reader = listener->acceptSync();
-        
+
             TEST( reader );
 
             co::Buffer buffer;
@@ -114,7 +114,7 @@ int main( int argc, char **argv )
         }
         else
         {
-			MPI_Barrier( MPI_COMM_WORLD );
+            MPI_Barrier( MPI_COMM_WORLD );
 
             co::ConnectionPtr writer = co::Connection::create( desc );
             TEST( writer->connect( ));
@@ -127,7 +127,7 @@ int main( int argc, char **argv )
                 TEST( writer->send( out, PACKETSIZE ));
 
             writer->close();
-        
+
             TEST( writer->getRefCount() == 1 );
         }
 
