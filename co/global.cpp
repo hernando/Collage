@@ -1,5 +1,5 @@
 
-/* Copyright (c) 2005-2013, Stefan Eilemann <eile@equalizergraphics.com>
+/* Copyright (c) 2005-2014, Stefan Eilemann <eile@equalizergraphics.com>
  *
  * This file is part of Collage <https://github.com/Eyescale/Collage>
  *
@@ -222,12 +222,12 @@ bool _mpiAllowed = false;
 
 void Global::allowMPI()
 {
-	_mpiAllowed = true;
+    _mpiAllowed = true;
 }
 
 bool Global::isMPIAllowed()
 {
-	return _mpiAllowed;
+    return _mpiAllowed;
 }
 
 int Global::getMPIRank()

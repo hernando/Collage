@@ -1,5 +1,5 @@
 
-/* Copyright (c) 2005-2012, Stefan Eilemann <eile@equalizergraphics.com>
+/* Copyright (c) 2005-2014, Stefan Eilemann <eile@equalizergraphics.com>
  *
  * This file is part of Collage <https://github.com/Eyescale/Collage>
  *
@@ -58,7 +58,7 @@ ConnectionDescription::ConnectionDescription( std::string& data )
         : type( CONNECTIONTYPE_TCPIP )
         , bandwidth( 0 )
         , port( 0 )
-		, rank( -1 )
+        , rank( -1 )
         , filename( "default" )
 {
     fromString( data );
@@ -126,7 +126,6 @@ bool ConnectionDescription::fromString( std::string& data )
         // else assume SEPARATOR-delimited list
         const std::string typeStr = data.substr( 0, nextPos );
         data = data.substr( nextPos + 1 );
-
         type = _getConnectionType( typeStr );
 
         nextPos = data.find( SEPARATOR );
@@ -134,7 +133,7 @@ bool ConnectionDescription::fromString( std::string& data )
             goto error;
 
         const std::string bandwidthStr = data.substr( 0, nextPos );
-        data                      = data.substr( nextPos + 1 );
+        data = data.substr( nextPos + 1 );
         bandwidth = atoi( bandwidthStr.c_str( ));
 
         nextPos = data.find( SEPARATOR );
@@ -142,22 +141,22 @@ bool ConnectionDescription::fromString( std::string& data )
             goto error;
 
         hostname = data.substr( 0, nextPos );
-        data      = data.substr( nextPos + 1 );
+        data = data.substr( nextPos + 1 );
 
         nextPos = data.find( SEPARATOR );
         if( nextPos == std::string::npos )
             goto error;
 
         interfacename = data.substr( 0, nextPos );
-        data       = data.substr( nextPos + 1 );
+        data = data.substr( nextPos + 1 );
 
         nextPos = data.find( SEPARATOR );
         if( nextPos == std::string::npos )
             goto error;
 
         const std::string portStr = data.substr( 0, nextPos );
-        data                 = data.substr( nextPos + 1 );
-        port                 = atoi( portStr.c_str( ));
+        data = data.substr( nextPos + 1 );
+        port = atoi( portStr.c_str( ));
 
         nextPos = data.find( SEPARATOR );
         if( nextPos == std::string::npos )
@@ -171,8 +170,8 @@ bool ConnectionDescription::fromString( std::string& data )
             goto error;
 
         const std::string rankStr = data.substr( 0, nextPos );
-        data                 = data.substr( nextPos + 1 );
-        rank                 = atoi( rankStr.c_str( ));
+        data = data.substr( nextPos + 1 );
+        rank = atoi( rankStr.c_str( ));
     }
     return true;
 
@@ -298,8 +297,8 @@ std::ostream& operator << ( std::ostream& os,
     if( desc.port != 0 )
         os << "port          " << desc.port << std::endl;
 
-	if( desc.rank >= 0 )
-		os << "rank          " << desc.rank << std::endl;
+    if( desc.rank >= 0 )
+        os << "rank          " << desc.rank << std::endl;
 
     if( !desc.getFilename().empty( ))
         os << "filename      \"" << desc.getFilename() << "\"" << std::endl;
