@@ -38,7 +38,7 @@ namespace co
         /** The bandwidth in kilobyte per second. @version 1.0 */
         int32_t bandwidth;
 
-        /** The listening port (TCPIP, SDP, IB, MCIP, RDMA, MPI). @version 1.0 */
+        /** The listening port(TCPIP, SDP, IB, MCIP, RDMA, MPI). @version 1.0 */
         uint16_t port;
 
 		/** The rank (MPI). @version 1.2 */
