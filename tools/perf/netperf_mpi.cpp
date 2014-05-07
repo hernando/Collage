@@ -187,14 +187,12 @@ public:
     {
         co::ConnectionPtr resultConn;
         co::ConnectionPtr newConn;
-        const bool multicast = _connection->getDescription()->type >=
-                               co::CONNECTIONTYPE_MULTICAST;
 
         while( _nClients > 0 )
         {
             switch( _connectionSet.select( )) // ...get next request
             {
-                //case co::ConnectionSet::EVENT_CONNECT: // new client
+                case co::ConnectionSet::EVENT_CONNECT: // new client
 
                     resultConn = _connectionSet.getConnection();
                     newConn = resultConn->acceptSync();
@@ -249,8 +247,6 @@ public:
                         delete receiver;
                         _receivers.erase( i );
 
-                        if( multicast )
-                            _connection->close();
                         std::cerr << --_nClients << " clients" << std::endl;
                     }
                     break;
@@ -278,8 +274,6 @@ public:
                         }
                     }
 
-                    if( multicast )
-                        _connection->close();
                     std::cerr << --_nClients << " clients" << std::endl;
                     break;
 
