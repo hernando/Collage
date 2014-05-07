@@ -1,5 +1,5 @@
 
-/* Copyright (c) 2005-2012, Stefan Eilemann <eile@equalizergraphics.com>
+/* Copyright (c) 2005-2014, Stefan Eilemann <eile@equalizergraphics.com>
  *
  * This file is part of Collage <https://github.com/Eyescale/Collage>
  *
@@ -38,10 +38,13 @@ namespace co
         /** The bandwidth in kilobyte per second. @version 1.0 */
         int32_t bandwidth;
 
-        /** The listening port(TCPIP, SDP, IB, MCIP, RDMA, MPI). @version 1.0 */
+        /**
+         * The listening port (TCPIP, SDP, IB, MCIP, RDMA, MPI).
+         * @version 1.0
+         */
         uint16_t port;
 
-        /** The rank (MPI). @version 1.2 */
+        /** The MPI rank. @version 1.1.1 */
         int32_t rank;
 
         /** The hostname to bind or connect to. @version 1.0 */

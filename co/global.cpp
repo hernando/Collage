@@ -1,5 +1,5 @@
 
-/* Copyright (c) 2005-2013, Stefan Eilemann <eile@equalizergraphics.com>
+/* Copyright (c) 2005-2014, Stefan Eilemann <eile@equalizergraphics.com>
  *
  * This file is part of Collage <https://github.com/Eyescale/Collage>
  *

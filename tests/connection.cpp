@@ -89,23 +89,21 @@ int main( int argc, char **argv )
         co::ConnectionDescriptionPtr desc = new co::ConnectionDescription;
         desc->type = types[i];
 
-        if( desc->type >= co::CONNECTIONTYPE_MULTICAST )
+        switch( desc->type )
         {
-            desc->setHostname( "239.255.12.34" );
-        }
-        else if( desc->type >= co::CONNECTIONTYPE_MPI )
-        {
-            /*
-             * The test is a singlenton MPI process, there is just one
-             * rank defined.
-             */
+        case co::CONNECTIONTYPE_MPI:
+            // The test is a singleton MPI process, there is just one rank
             desc->rank = 0;
             // A random MPI tag
             desc->port = 125;
-        }
-        else
-        {
-            desc->setHostname( "127.0.0.1" );
+            break;
+
+        default:
+            if( desc->type >= co::CONNECTIONTYPE_MULTICAST )
+                desc->setHostname( "239.255.12.34" );
+            else
+                desc->setHostname( "127.0.0.1" );
+            break;
         }
 
         co::ConnectionPtr listener = co::Connection::create( desc );

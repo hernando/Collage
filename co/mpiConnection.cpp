@@ -38,9 +38,9 @@ typedef lunchbox::RefPtr< co::EventConnection > EventConnectionPtr;
 
 /*
  * Every connection inside a process has a unique MPI tag.
- * This class allow to register a MPI tag and get a new unique tag.
+ * This class allows to register a MPI tag and get a new unique tag.
  *
- * Due to, the tag is defined by a 16 bits integer on
+ * Due to the tag is defined by a 16 bits integer on
  * ConnectionDescription ( the real name is port but it
  * is reused for this purpuse ). The listeners always
  * use tags [ 0, 65535 ] and others [ 65536, 2147483648 ].
@@ -427,7 +427,7 @@ class MPIConnection
 public:
 
     MPIConnection() :
-          rank( -1 )
+        rank( -1 )
         , peerRank( -1 )
         , tagSend( -1 )
         , tagRecv( -1 )
@@ -466,8 +466,8 @@ class AsyncConnection : lunchbox::Thread
 public:
 
     AsyncConnection( MPIConnection * detail, const int32_t tag,
-                        EventConnectionPtr notifier) :
-          _detail( detail )
+                        EventConnectionPtr notifier)
+        : _detail( detail )
         , _tag( tag )
         , _status( true )
         , _notifier( notifier )
@@ -769,12 +769,11 @@ void MPIConnection::acceptNB()
      */
     LBASSERT( _impl->asyncConnection == 0 )
 
-    detail::MPIConnection * newImpl = new detail::MPIConnection( );
+        detail::MPIConnection * newImpl = new detail::MPIConnection( );
 
     _impl->asyncConnection = new detail::AsyncConnection( newImpl,
                                                             _impl->tagRecv,
                                                             _impl->event);
-
 }
 
 ConnectionPtr MPIConnection::acceptSync()
@@ -784,13 +783,13 @@ ConnectionPtr MPIConnection::acceptSync()
 
     LBASSERT( _impl->asyncConnection != 0 )
 
-    if( !_impl->asyncConnection->wait() )
-    {
-        LBWARN << "Error accepting a MPI connection, closing connection."
-               << std::endl;
-        _close();
-        return 0;
-    }
+        if( !_impl->asyncConnection->wait() )
+        {
+            LBWARN << "Error accepting a MPI connection, closing connection."
+                   << std::endl;
+            _close();
+            return 0;
+        }
 
     detail::MPIConnection * newImpl = _impl->asyncConnection->getImpl( );
 

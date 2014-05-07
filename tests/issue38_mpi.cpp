@@ -164,7 +164,7 @@ int main( int argc, char **argv )
 
 #else
 
-int main( int argc, char **argv )
+int main( int , char **)
 {
     std::cout << "MPI is not supported" << std::endl;
     return EXIT_SUCCESS;

@@ -28,7 +28,7 @@
 #include <lunchbox/pluginRegistry.h>
 
 #ifdef COLLAGE_USE_MPI
-#   include <mpi.h>
+#  include <mpi.h>
 #endif
 
 namespace co
@@ -54,63 +54,51 @@ bool _init( const int argc, char** argv )
         return true;
 
 #ifdef COLLAGE_USE_MPI
+	/* MPI library threading support is set by default to MPI_THREAD_SINGLE.
+       Collage is a multithreaded library, so, the required level of thread
+       support should be MPI_THREAD_SERIALIZED at least.
 
-    /*  MPI library set by default the MPI_THREAD_SINGLE level of thread
-        support. Collage is a multithreaded library, so, the required level of
-        thread support should be MPI_THREAD_SERIALIZED at least.
+       NOTE:
+       Be aware that MPI_THREAD_MULTIPLE is only lightly tested and likely
+       still has some bugs. Please, refer the below links:
+       https://www.open-mpi.org/faq/?category=supported-systems#thread-support
+       https://www.open-mpi.org/doc/v1.4/man3/MPI_Init_thread.3.php
 
-        NOTE:
-        Be aware that MPI_THREAD_MULTIPLE is only lightly tested and likely
-        still has some bugs. Please, refer the below links:
-        https://www.open-mpi.org/faq/?category=supported-systems#thread-support
-        https://www.open-mpi.org/doc/v1.4/man3/MPI_Init_thread.3.php
+       MPI_Init_thread and MPI_Finalize:
+       Should only be called once.
+       Should only be called by a single thread
+       Both should be called by the same thread, known as the main thread.
 
-        MPI_Init_thread and MPI_Finalize:
-        Should only be called once.
-        Should only be called by a single thread
-        Both should be called by the same thread, known as the main thread.
+       Here, the MPI library is initialized and requested for
+       MPI_THREAD_MULTIPLE level of thread support. To make the library safe, if
+       the thread support is not at least MPI_THREAD_SERIALIZED, MPI
+       communications will not be allowed.
+	*/
 
-        Here, the MPI library is initialized and requested for
-        MPI_THREAD_MULTIPLE level of thread support. To make the library safe,
-        if the thread support is not at least MPI_THREAD_SERIALIZED, MPI
-        communications will not be allowed.
-    */
+	int threadSupportProvided = -1;
+	MPI_Init_thread( (int*) &argc, &argv, MPI_THREAD_MULTIPLE,
+                     &threadSupportProvided );
 
-    int threadSupportProvided = -1;
-    if( MPI_SUCCESS != MPI_Init_thread( (int*) &argc, &argv,
-                                       MPI_THREAD_MULTIPLE,
-                                       &threadSupportProvided ) )
+	switch( threadSupportProvided )
     {
-        LBERROR << "Error at initialization MPI library" << std::endl;
-        return false;
-    }
-
-    switch( threadSupportProvided )
-    {
-        case MPI_THREAD_SINGLE:
-            LBINFO << "MPI thread support provided: MPI_THREAD_SINGLE"
-                   << std::endl;
-            break;
-        case MPI_THREAD_FUNNELED:
-            LBINFO << "MPI thread support provided: MPI_THREAD_FUNNELED"
-                   << std::endl;
-            break;
-        case MPI_THREAD_SERIALIZED:
-            LBINFO << "MPI thread support provided: MPI_THREAD_SERIALIZED"
-                   << std::endl;
-            break;
-        case MPI_THREAD_MULTIPLE:
-            LBINFO << "MPI thread support provided: MPI_THREAD_MULTIPLE"
-                   << std::endl;
-            break;
-        default:
-            LBERROR << "MPI thread support provided: unknown" << std::endl;
-            return false;
-    }
-
-    if ( threadSupportProvided == MPI_THREAD_SERIALIZED ||
-        threadSupportProvided == MPI_THREAD_MULTIPLE )
-            co::Global::allowMPI();
+    case MPI_THREAD_SINGLE:
+		LBINFO << "MPI_THREAD_SINGLE thread support" << std::endl;
+        break;
+	case MPI_THREAD_FUNNELED:
+		LBINFO << "MPI_THREAD_FUNNELED thread support" << std::endl;
+        break;
+    case MPI_THREAD_SERIALIZED:
+		LBINFO << "MPI_THREAD_SERIALIZED thread support" << std::endl;
+        co::Global::allowMPI();
+        break;
+    case MPI_THREAD_MULTIPLE:
+		LBINFO << "MPI_THREAD_MULTIPLE thread support" << std::endl;
+        co::Global::allowMPI();
+        break;
+    default:
+		LBERROR << "Unknown MPI thread support" << std::endl;
+        break;
+	}
 #endif
 
     if( !lunchbox::init( argc, argv ))

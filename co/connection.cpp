@@ -179,18 +179,15 @@ ConnectionPtr Connection::create( ConnectionDescriptionPtr description )
 #endif
 #ifdef COLLAGE_USE_MPI
         case CONNECTIONTYPE_MPI:
-            /* Check if MPI is allowed:
-             * Thread support has to be provided
-             * by the MPI library, if not, to
-             * avoid future errors MPI connection is
-             * disabled.
-             * Future: fix it.
+            /* Check if MPI is allowed: Thread support has to be provided by the
+             * MPI library, if not the MPI connection is disabled to avoid
+             * future errors.  TODO: fix it.
              */
-            if( co::Global::isMPIAllowed( ) )
-            {
-                connection = new MPIConnection;
-                break;
-            }
+            if( !co::Global::isMPIAllowed( ))
+                return 0;
+
+            connection = new MPIConnection;
+            break;
 #endif
 
         default:
