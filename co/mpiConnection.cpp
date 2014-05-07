@@ -124,8 +124,7 @@ Dispatcher( const int32_t rank, const int32_t source, const int32_t tag,
 
 ~Dispatcher()
 {
-    if( _bufferData != 0)
-        delete _bufferData;
+    delete _bufferData;
 }
 
 int64_t _copyFromBuffer( void * buffer, const int64_t bytes )
@@ -618,12 +617,8 @@ MPIConnection::~MPIConnection()
 {
     _close();
 
-    if( _impl->asyncConnection != 0 )
-        delete _impl->asyncConnection;
-
-    if( _impl->dispatcher != 0 )
-        delete _impl->dispatcher;
-
+    delete _impl->asyncConnection;
+    delete _impl->dispatcher;
     delete _impl;
 }
 
@@ -631,8 +626,8 @@ co::Connection::Notifier MPIConnection::getNotifier() const
 {
     if( isConnected() || isListening() )
         return _impl->event->getNotifier();
-    else
-        return -1;
+
+    return -1;
 }
 
 bool MPIConnection::connect()
