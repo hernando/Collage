@@ -19,6 +19,9 @@
 #include <test.h>
 #include <lunchbox/clock.h>
 #include <lunchbox/rng.h>
+#ifdef COLLAGE_USE_MPI
+#  include <co/mpi.h>
+#endif
 
 #define NCOMMANDS 10000
 
@@ -88,9 +91,118 @@ private:
 
 typedef lunchbox::RefPtr< LocalNode > LocalNodePtr;
 
+void runMPITest()
+{
+    if( co::MPI::instance()->getRank() == 0 )
+    {
+        co::ConnectionDescriptionPtr connDesc = new co::ConnectionDescription;
+        connDesc->type = co::CONNECTIONTYPE_MPI;
+        connDesc->rank = 0;
+        connDesc->port = 2048;
+        connDesc->setHostname( "localhost" );
+
+        LocalNodePtr server = new LocalNode;
+        server->addConnectionDescription( connDesc );
+        TEST( server->listen( ));
+
+        MPI_Barrier( MPI_COMM_WORLD );
+
+        TEST( server->close( ));
+
+        TESTINFO( server->getRefCount() == 1, server->getRefCount( ));
+    }
+    else
+    {
+        co::ConnectionDescriptionPtr connDesc = new co::ConnectionDescription;
+        connDesc->type = co::CONNECTIONTYPE_MPI;
+        connDesc->rank = 0;
+        connDesc->port = 2048;
+        connDesc->setHostname( "localhost" );
+
+        co::NodePtr serverProxy = new co::Node;
+        serverProxy->addConnectionDescription( connDesc );
+
+        connDesc = new co::ConnectionDescription;
+        connDesc->type = co::CONNECTIONTYPE_MPI;
+        connDesc->rank = 1;
+        connDesc->port = 1026;
+        connDesc->setHostname( "localhost" );
+
+        LocalNodePtr client = new LocalNode;
+        client->addConnectionDescription( connDesc );
+        TEST( client->listen( ));
+        TEST( client->connect( serverProxy ));
+
+        lunchbox::Clock clock;
+        for( size_t i = 0; i < NCOMMANDS; ++i )
+            serverProxy->send( CMD_ASYNC );
+
+    LB_PUSH_DEPRECATED
+        uint32_t request = client->registerRequest();
+    LB_POP_DEPRECATED
+        serverProxy->send( CMD_SYNC ) << request;
+        client->waitRequest( request );
+        const float asyncTime = clock.resetTimef();
+
+        for( size_t i = 0; i < NCOMMANDS; ++i )
+        {
+    LB_PUSH_DEPRECATED
+            request = client->registerRequest();
+    LB_POP_DEPRECATED
+            serverProxy->send( CMD_SYNC ) << request;
+            client->waitRequest( request );
+        }
+        const float syncTime = clock.resetTimef();
+
+        for( size_t i = 0; i < NCOMMANDS; ++i )
+        {
+            lunchbox::Request< void > future = client->registerRequest< void >();
+            serverProxy->send( CMD_SYNC ) << future;
+        }
+        const float syncTimeFuture = clock.resetTimef();
+
+        for( size_t i = 0; i < NCOMMANDS; ++i )
+        {
+            lunchbox::Request< uint32_t > future =
+                client->registerRequest< uint32_t >();
+            serverProxy->send( CMD_DATA ) << future << payload;
+        }
+        const float syncTimePayload = clock.resetTimef();
+
+        MPI_Barrier( MPI_COMM_WORLD );
+
+        std::cout << "Async command: " << asyncTime/float(NCOMMANDS)
+                  << " ms, sync: " << syncTime/float(NCOMMANDS)
+                  << " ms, using future: " << syncTimeFuture/float(NCOMMANDS+1)
+                  << " ms, with " << payload.size() << "b payload: "
+                  << syncTimePayload/float(NCOMMANDS+1) << std::endl;
+
+        TEST( client->disconnect( serverProxy ));
+        TEST( client->close( ));
+
+        serverProxy->printHolders( std::cerr );
+        TESTINFO( serverProxy->getRefCount() == 1, serverProxy->getRefCount( ));
+        TESTINFO( client->getRefCount() == 1, client->getRefCount( ));
+    }
+}
+
 int main( int argc, char **argv )
 {
     TEST( co::init( argc, argv ) );
+
+    #ifdef COLLAGE_USE_MPI
+    /* Check if started with mpirun and size of MPI_COMM_WORLD
+     * is greater than 1.
+     */
+    if( co::MPI::instance()->supportsThreads() &&
+        co::MPI::instance()->getSize() > 1 )
+    {
+        if( co::MPI::instance()->getSize() == 2 )
+            runMPITest();
+        co::exit();
+        return EXIT_SUCCESS;
+    }
+    #endif
 
     co::ConnectionDescriptionPtr connDesc = new co::ConnectionDescription;
 

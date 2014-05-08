@@ -22,6 +22,9 @@
 #include <co/connectionDescription.h>
 #include <co/connectionSet.h>
 #include <co/init.h>
+#ifdef COLLAGE_USE_MPI
+#  include <co/mpi.h>
+#endif
 
 #include <lunchbox/clock.h>
 #include <lunchbox/monitor.h>
@@ -63,11 +66,102 @@ private:
     co::ConnectionPtr connection_;
 };
 
+void runMPITest()
+{
+    co::ConnectionDescriptionPtr desc = new co::ConnectionDescription;
+    desc->type = co::CONNECTIONTYPE_MPI;
+    desc->rank = 0;
+    desc->port = 1234;
+    desc->setHostname( "127.0.0.1" );
+
+    if( co::MPI::instance()->getRank() == 0 )
+    {
+        co::ConnectionPtr listener = co::Connection::create( desc );
+        TEST( listener );
+        TEST( listener->listen( ));
+
+        co::ConnectionSet set;
+
+        for( size_t i = 0; i < NCONNECTIONS; ++i )
+        {
+            listener->acceptNB();
+            co::ConnectionPtr reader = listener->acceptSync();
+            TEST( reader );
+
+            set.addConnection( reader );
+        }
+
+        co::Buffer buffer;
+        co::BufferPtr syncBuffer;
+
+        for( size_t i = 0; i < NPACKETS * NCONNECTIONS ; ++i )
+        {
+            const co::ConnectionSet::Event result = set.select();
+            TESTINFO( result == co::ConnectionSet::EVENT_DATA, result );
+
+            co::ConnectionPtr connection = set.getConnection();
+            connection->recvNB( &buffer, PACKETSIZE );
+            TEST( connection->recvSync( syncBuffer ));
+            TEST( syncBuffer == &buffer );
+            TEST( buffer.getSize() == PACKETSIZE );
+            buffer.setSize( 0 );
+        }
+
+        const co::Connections& connections = set.getConnections();
+        while( !connections.empty( ))
+        {
+            co::ConnectionPtr connection = connections.back();
+            connection->close();
+            TEST( set.removeConnection( connection ));
+        }
+    }
+    else
+    {
+        co::ConnectionPtr writers[ NCONNECTIONS ];
+        Writer threads[ NCONNECTIONS ];
+
+        for( size_t i = 0; i < NCONNECTIONS; ++i )
+        {
+
+            writers[i] = co::Connection::create( desc );
+            TEST( writers[i]->connect( ));
+
+            threads[i].startSend( writers[i] );
+        }
+
+        const float runtime = threads[0].runtime;
+        const float delta = runtime / 10.f;
+        for( size_t i = 0; i < NCONNECTIONS; ++i )
+        {
+            threads[i].join();
+            writers[i]->close();
+            TESTINFO( std::abs( threads[i].runtime - runtime ) < delta ,
+                      threads[i].runtime << " != " << runtime );
+        }
+
+    }
+}
+
 }
 
 int main( int argc, char **argv )
 {
     co::init( argc, argv );
+
+    #ifdef COLLAGE_USE_MPI
+    /* Check if started with mpirun and size of MPI_COMM_WORLD
+     * is equal to 2.
+     */
+    if( co::MPI::instance()->supportsThreads() &&
+        co::MPI::instance()->getSize() > 1 )
+    {
+        if( co::MPI::instance()->getSize() == 2 )
+            runMPITest();
+        co::exit();
+        return EXIT_SUCCESS;
+    }
+    #endif
+
     co::ConnectionDescriptionPtr desc = new co::ConnectionDescription;
     desc->setHostname( "127.0.0.1" );
 
