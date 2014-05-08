@@ -35,6 +35,9 @@
 #  define MIN LB_MIN
 #endif
 
+#ifdef COLLAGE_USE_MPI
+#  include <co/mpi.h>
+#endif
 
 namespace po = boost::program_options;
 namespace bp = boost::posix_time;
@@ -301,6 +304,90 @@ private:
     const bool _useThreads;
 };
 
+void runMPI( bool useThreads, size_t packetSize,
+                size_t nPackets, uint32_t waitTime)
+{
+    co::ConnectionDescriptionPtr description = new co::ConnectionDescription;
+    description->type = co::CONNECTIONTYPE_MPI;
+    description->port = 4242;
+    description->rank = 0;
+    description->setHostname( "localhost" );
+
+    const bool isClient =  co::MPI::instance()->getRank() != 0;
+    // run
+    co::ConnectionPtr connection = co::Connection::create( description );
+    if( !connection )
+    {
+        LBWARN << "Unsupported connection: " << description << std::endl;
+        return;
+    }
+
+    if( isClient )
+    {
+        if( !connection->connect( ))
+            ::exit( EXIT_FAILURE );
+
+        lunchbox::Buffer< uint8_t > buffer;
+        buffer.resize( packetSize );
+        for( size_t i = 0; i<packetSize; ++i )
+            buffer[i] = static_cast< uint8_t >( i );
+
+        const float mBytesSec = buffer.getSize() / 1024.0f / 1024.0f * 1000.0f;
+        lunchbox::Clock clock;
+        size_t lastOutput = nPackets;
+
+        clock.reset();
+        while( nPackets-- )
+        {
+            buffer[SEQUENCE] = uint8_t( nPackets );
+            LBCHECK( connection->send( buffer.getData(), buffer.getSize() ));
+            const float time = clock.getTimef();
+            if( time > 1000.f )
+            {
+                const lunchbox::ScopedMutex<> mutex( _mutexPrint );
+                const size_t nSamples = lastOutput - nPackets;
+                std::cerr << "Send perf: " << mBytesSec / time * nSamples
+                          << "MB/s (" << nSamples / time * 1000.f  << "pps)"
+                          << std::endl;
+
+                lastOutput = nPackets;
+                clock.reset();
+            }
+            if( waitTime > 0 )
+                boost::this_thread::sleep( bp::milliseconds( waitTime ));
+        }
+        const float time = clock.getTimef();
+        const size_t nSamples = lastOutput - nPackets;
+        if( nSamples != 0 )
+        {
+            const lunchbox::ScopedMutex<> mutex( _mutexPrint );
+            std::cerr << "Send perf: " << mBytesSec / time * nSamples
+                      << "MB/s (" << nSamples / time * 1000.f  << "pps)"
+                      << std::endl;
+        }
+    }
+    else
+    {
+        Selector* selector = 0;
+        selector = new Selector( connection, packetSize, useThreads );
+
+        selector->start();
+
+        LBASSERTINFO( connection->getRefCount()>=1, connection->getRefCount( ));
+
+        if ( selector )
+            selector->join();
+
+        delete selector;
+
+        connection->close();
+    }
+
+
+    LBASSERTINFO( connection->getRefCount() == 1, connection->getRefCount( ));
+    connection = 0;
+}
+
 }
 
 int main( int argc, char **argv )
@@ -309,7 +396,7 @@ int main( int argc, char **argv )
 
     co::ConnectionDescriptionPtr description = new co::ConnectionDescription;
     description->type = co::CONNECTIONTYPE_TCPIP;
-    description->port = 4242;
+    description->port = 4244;
 
     bool isClient     = true;
     bool useThreads   = false;
@@ -374,6 +461,20 @@ int main( int argc, char **argv )
         co::exit();
         return EXIT_FAILURE;
     }
+    
+
+    #ifdef COLLAGE_USE_MPI
+    /* Check if started with mpirun and size of MPI_COMM_WORLD
+     * is equal to 2.
+     */
+    if( co::MPI::instance()->supportsThreads() &&
+        co::MPI::instance()->getSize() > 1 )
+    {
+        runMPI( useThreads, packetSize, nPackets, waitTime);
+        co::exit();
+        return EXIT_SUCCESS;
+    }
+    #endif
 
     // run
     co::ConnectionPtr connection = co::Connection::create( description );
