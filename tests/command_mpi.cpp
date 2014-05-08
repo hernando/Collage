@@ -23,7 +23,7 @@
 
 #ifdef COLLAGE_USE_MPI
 
-#include <mpi.h>
+#include <co/mpi.h>
 
 #define NCOMMANDS 10000
 
@@ -98,15 +98,15 @@ int main( int argc, char **argv )
     TEST( co::init( argc, argv ) );
 
     /** Check MPI Comm Size is 2 */
-    if( co::Global::getMPISize() != 2 )
+    if( co::MPI::instance()->getSize() != 2 )
     {
-        if( co::Global::getMPIRank() == 0 )
+        if( co::MPI::instance()->getRank() == 0 )
             std::cout << "Test for two MPI process." << std::endl;
         co::exit();
         return EXIT_SUCCESS;
     }
 
-    if( co::Global::getMPIRank() == 0 )
+    if( co::MPI::instance()->getRank() == 0 )
     {
         co::ConnectionDescriptionPtr connDesc = new co::ConnectionDescription;
         connDesc->type = co::CONNECTIONTYPE_MPI;

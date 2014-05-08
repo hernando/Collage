@@ -31,7 +31,7 @@
 
 #ifdef COLLAGE_USE_MPI
 
-#include <mpi.h>
+#include <co/mpi.h>
 
 #define PACKETSIZE (12345)
 #define NPACKETS   (23456)
@@ -51,9 +51,9 @@ int main( int argc, char **argv )
     co::init( argc, argv );
 
     /** Check MPI Comm Size is 2 */
-    if( co::Global::getMPISize() != 2 )
+    if( co::MPI::instance()->getSize() != 2 )
     {
-        if( co::Global::getMPIRank() == 0 )
+        if( co::MPI::instance()->getRank() == 0 )
             std::cout << "Test for two MPI process." << std::endl;
         co::exit();
         return EXIT_SUCCESS;
@@ -69,7 +69,7 @@ int main( int argc, char **argv )
 
         lunchbox::Clock clock;
 
-        if( co::Global::getMPIRank() == 0 )
+        if( co::MPI::instance()->getRank() == 0 )
         {
             co::ConnectionPtr listener = co::Connection::create( desc );
             if( !listener )
@@ -133,7 +133,8 @@ int main( int argc, char **argv )
 
         const float time = clock.getTimef();
 
-        std::cout << desc->type << " rank " << co::Global::getMPIRank() << ": "
+        std::cout << desc->type << " rank " << co::MPI::instance()->getRank()
+                  << ": "
                   << NPACKETS * PACKETSIZE / 1024.f / 1024.f * 1000.f / time
                   << " MB/s" << std::endl;
     }

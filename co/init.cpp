@@ -22,14 +22,13 @@
 #include "global.h"
 #include "node.h"
 #include "socketConnection.h"
+#ifdef COLLAGE_USE_MPI
+#  include "mpi.h"
+#endif
 
 #include <lunchbox/init.h>
 #include <lunchbox/os.h>
 #include <lunchbox/pluginRegistry.h>
-
-#ifdef COLLAGE_USE_MPI
-#  include <mpi.h>
-#endif
 
 namespace co
 {
@@ -54,51 +53,8 @@ bool _init( const int argc, char** argv )
         return true;
 
 #ifdef COLLAGE_USE_MPI
-	/* MPI library threading support is set by default to MPI_THREAD_SINGLE.
-       Collage is a multithreaded library, so, the required level of thread
-       support should be MPI_THREAD_SERIALIZED at least.
-
-       NOTE:
-       Be aware that MPI_THREAD_MULTIPLE is only lightly tested and likely
-       still has some bugs. Please, refer the below links:
-       https://www.open-mpi.org/faq/?category=supported-systems#thread-support
-       https://www.open-mpi.org/doc/v1.4/man3/MPI_Init_thread.3.php
-
-       MPI_Init_thread and MPI_Finalize:
-       Should only be called once.
-       Should only be called by a single thread
-       Both should be called by the same thread, known as the main thread.
-
-       Here, the MPI library is initialized and requested for
-       MPI_THREAD_MULTIPLE level of thread support. To make the library safe, if
-       the thread support is not at least MPI_THREAD_SERIALIZED, MPI
-       communications will not be allowed.
-	*/
-
-	int threadSupportProvided = -1;
-	MPI_Init_thread( (int*) &argc, &argv, MPI_THREAD_MULTIPLE,
-                     &threadSupportProvided );
-
-	switch( threadSupportProvided )
-    {
-    case MPI_THREAD_SINGLE:
-		LBINFO << "MPI_THREAD_SINGLE thread support" << std::endl;
-        break;
-	case MPI_THREAD_FUNNELED:
-		LBINFO << "MPI_THREAD_FUNNELED thread support" << std::endl;
-        break;
-    case MPI_THREAD_SERIALIZED:
-		LBINFO << "MPI_THREAD_SERIALIZED thread support" << std::endl;
-        co::Global::allowMPI();
-        break;
-    case MPI_THREAD_MULTIPLE:
-		LBINFO << "MPI_THREAD_MULTIPLE thread support" << std::endl;
-        co::Global::allowMPI();
-        break;
-    default:
-		LBERROR << "Unknown MPI thread support" << std::endl;
-        break;
-	}
+    if( !MPI::instance()->init( argc, argv ) )
+        return false;
 #endif
 
     if( !lunchbox::init( argc, argv ))
@@ -142,14 +98,6 @@ bool exit()
     // de-initialize registered plugins
     lunchbox::PluginRegistry& plugins = Global::getPluginRegistry();
     plugins.exit();
-
-#ifdef COLLAGE_USE_MPI
-    if( MPI_SUCCESS != MPI_Finalize() )
-    {
-        LBERROR << "Error at finalizing MPI library" << std::endl;
-        return false;
-    }
-#endif
 
     return lunchbox::exit();
 }

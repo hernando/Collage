@@ -35,7 +35,7 @@
 
 #ifdef COLLAGE_USE_MPI
 
-#include <mpi.h>
+#include <co/mpi.h>
 
 namespace
 {
@@ -88,7 +88,7 @@ int main( int argc, char **argv )
 {
     co::init( argc, argv );
 
-    if( co::Global::getMPISize() == 1 )
+    if( co::MPI::instance()->getSize() == 1 )
     {
         std::cout << "Test for 2 o more MPI process." << std::endl;
         co::exit();
@@ -98,10 +98,10 @@ int main( int argc, char **argv )
     lunchbox::RNG rng;
     const uint16_t port = 1024;
 
-    if( co::Global::getMPIRank() == 0 )
+    if( co::MPI::instance()->getRank() == 0 )
     {
         lunchbox::RefPtr< Server > server;
-        server = new Server( co::Global::getMPISize() * NMESSAGES );
+        server = new Server( co::MPI::instance()->getSize() * NMESSAGES );
         co::ConnectionDescriptionPtr connDesc = new co::ConnectionDescription;
         connDesc->type = co::CONNECTIONTYPE_MPI;
         connDesc->port = port;
@@ -130,7 +130,7 @@ int main( int argc, char **argv )
         co::LocalNodePtr client = new co::LocalNode;
         connDesc = new co::ConnectionDescription;
         connDesc->type = co::CONNECTIONTYPE_MPI;
-        connDesc->rank = co::Global::getMPIRank();
+        connDesc->rank = co::MPI::instance()->getRank();
 
         client->addConnectionDescription( connDesc );
         TEST( client->listen( ));

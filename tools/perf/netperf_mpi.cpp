@@ -22,6 +22,7 @@
 #define LB_RELEASE_ASSERT
 
 #include <co/co.h>
+#include <co/mpi.h>
 #include <lunchbox/clock.h>
 #include <lunchbox/lock.h>
 #include <lunchbox/monitor.h>
@@ -304,7 +305,7 @@ int main( int argc, char **argv )
     LBCHECK( co::init( argc, argv ));
 
     /** Check at least more than one MPI process. */
-    if( co::Global::getMPISize() == 1 )
+    if( co::MPI::instance()->getSize() == 1 )
     {
         std::cout << "Test for 2 o more MPI process." << std::endl;
         co::exit();
@@ -355,14 +356,14 @@ int main( int argc, char **argv )
         // evaluate parsed arguments
         if( showHelp )
         {
-            if( co::Global::getMPIRank() == 0 )
+            if( co::MPI::instance()->getRank() == 0 )
                 std::cout << options << std::endl;
             co::exit();
             return EXIT_SUCCESS;
         }
 
         /** Rank 0 is the server. */
-        if( co::Global::getMPIRank() == 0 )
+        if( co::MPI::instance()->getRank() == 0 )
             isClient = false;
         else
             isClient = true;

@@ -27,10 +27,6 @@
 #include <vector>
 #include <sstream>
 
-#ifdef COLLAGE_USE_MPI
-#   include <mpi.h>
-#endif
-
 namespace co
 {
 #define SEPARATOR '#'
@@ -216,47 +212,4 @@ size_t Global::getCommandQueueLimit()
     return std::numeric_limits< size_t >::max();
 }
 
-#ifdef COLLAGE_USE_MPI
-
-bool _mpiAllowed = false;
-
-void Global::allowMPI()
-{
-    _mpiAllowed = true;
-}
-
-bool Global::isMPIAllowed()
-{
-    return _mpiAllowed;
-}
-
-int Global::getMPIRank()
-{
-    int rank = -1;
-
-    if( MPI_SUCCESS != MPI_Comm_rank( MPI_COMM_WORLD, &rank ) )
-    {
-        LBWARN << "Error determining the rank of the calling\
-                    process in the communicator." << std::endl;
-        return -1;
-    }
-
-    return rank;
-}
-
-int Global::getMPISize()
-{
-    int size = -1;
-
-    if( MPI_SUCCESS != MPI_Comm_size( MPI_COMM_WORLD, &size ) )
-    {
-        LBWARN << "Error determining the size of the group\
-                    associated with a communicator." << std::endl;
-        return -1;
-    }
-
-    return size;
-}
-
-#endif
 }

@@ -31,7 +31,7 @@
 
 #ifdef COLLAGE_USE_MPI
 
-#include <mpi.h>
+#include <co/mpi.h>
 
 
 #define PACKETSIZE (12345)
@@ -77,9 +77,9 @@ int main( int argc, char **argv )
     co::init( argc, argv );
 
     /** Check MPI Comm Size is 2 */
-    if( co::Global::getMPISize() != 2 )
+    if( co::MPI::instance()->getSize() != 2 )
     {
-        if( co::Global::getMPIRank() == 0 )
+        if( co::MPI::instance()->getRank() == 0 )
             std::cout << "Test for two MPI process." << std::endl;
         co::exit();
         return EXIT_SUCCESS;
@@ -91,7 +91,7 @@ int main( int argc, char **argv )
     desc->port = 1234;
     desc->setHostname( "127.0.0.1" );
 
-    if( co::Global::getMPIRank() == 0 )
+    if( co::MPI::instance()->getRank() == 0 )
     {
         co::ConnectionPtr listener = co::Connection::create( desc );
         TEST( listener );
