@@ -304,6 +304,7 @@ private:
     const bool _useThreads;
 };
 
+#ifdef COLLAGE_USE_MPI
 void runMPI( bool useThreads, size_t packetSize,
                 size_t nPackets, uint32_t waitTime)
 {
@@ -387,6 +388,7 @@ void runMPI( bool useThreads, size_t packetSize,
     LBASSERTINFO( connection->getRefCount() == 1, connection->getRefCount( ));
     connection = 0;
 }
+#endif
 
 }
 

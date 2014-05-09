@@ -66,6 +66,7 @@ private:
     co::ConnectionPtr connection_;
 };
 
+#ifdef COLLAGE_USE_MPI
 void runMPITest()
 {
     co::ConnectionDescriptionPtr desc = new co::ConnectionDescription;
@@ -141,6 +142,7 @@ void runMPITest()
 
     }
 }
+#endif
 
 }
 

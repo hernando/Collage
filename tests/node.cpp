@@ -86,6 +86,7 @@ private:
     unsigned _messagesLeft;
 };
 
+#ifdef COLLAGE_USE_MPI
 void runMPITest()
 {
     lunchbox::RNG rng;
@@ -150,6 +151,7 @@ void runMPITest()
         TESTINFO( client->getRefCount() == 1, client->getRefCount( ));
     }
 }
+#endif
 
 int main( int argc, char **argv )
 {

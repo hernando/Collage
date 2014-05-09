@@ -91,6 +91,7 @@ private:
 
 typedef lunchbox::RefPtr< LocalNode > LocalNodePtr;
 
+#ifdef COLLAGE_USE_MPI
 void runMPITest()
 {
     if( co::MPI::instance()->getRank() == 0 )
@@ -185,6 +186,7 @@ void runMPITest()
         TESTINFO( client->getRefCount() == 1, client->getRefCount( ));
     }
 }
+#endif
 
 int main( int argc, char **argv )
 {
