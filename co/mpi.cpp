@@ -46,8 +46,6 @@ MPI::MPI( int argc, char ** argv )
                                             MPI_THREAD_MULTIPLE,
                                             &threadSupportProvided ) )
     {
-        _init = true;
-        _supportedThreads = false;
         LBERROR << "Error at initialization MPI library" << std::endl;
         return;
     }
@@ -58,11 +56,9 @@ MPI::MPI( int argc, char ** argv )
     {
     case MPI_THREAD_SINGLE:
 		LBINFO << "MPI_THREAD_SINGLE thread support" << std::endl;
-        _supportedThreads = false;
         break;
 	case MPI_THREAD_FUNNELED:
 		LBINFO << "MPI_THREAD_FUNNELED thread support" << std::endl;
-        _supportedThreads = false;
         break;
     case MPI_THREAD_SERIALIZED:
 		LBINFO << "MPI_THREAD_SERIALIZED thread support" << std::endl;
@@ -74,20 +70,17 @@ MPI::MPI( int argc, char ** argv )
         break;
     default:
 		LBERROR << "Unknown MPI thread support" << std::endl;
-        _supportedThreads = false;
 	}
 
     if( MPI_SUCCESS != MPI_Comm_rank( MPI_COMM_WORLD, &_rank ) )
     {
         LBWARN << "Error determining the rank of the calling\
                     process in the communicator." << std::endl;
-        _supportedThreads = false;
     }
     if( MPI_SUCCESS != MPI_Comm_size( MPI_COMM_WORLD, &_size ) )
     {
         LBWARN << "Error determining the size of the group\
                     associated with a communicator." << std::endl;
-        _supportedThreads = false;
     }
 }
 
