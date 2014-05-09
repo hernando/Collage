@@ -52,11 +52,6 @@ bool _init( const int argc, char** argv )
     if( ++_initialized > 1 ) // not first
         return true;
 
-#ifdef COLLAGE_USE_MPI
-    if( !MPI::instance()->init( argc, argv ) )
-        return false;
-#endif
-
     if( !lunchbox::init( argc, argv ))
         return false;
 

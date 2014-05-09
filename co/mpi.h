@@ -49,35 +49,40 @@ namespace co
        communications will not be allowed.
     */
 
-    /** Base class for MPI functionality */
+    /* Base class for MPI functionality.
+     * Singlenton pattern, the instance is not a pointer to force destruction.
+     */
     class MPI
     {
         public:
             MPI();
 
-            ~MPI();
-
-            CO_API bool init(int argc, char ** argv);
-
             /* @return true if the MPI library has multithread
              * support, otherwise return false.
              * @version 1.1.1
              */
-            CO_API bool supportsThreads();
+            CO_API bool supportsThreads() const;
 
             /** @return the rank of the process that calls it @version 1.1.1 */
-            CO_API int getRank();
+            CO_API int getRank() const;
 
             /** @return the number of processes involved @ version 1.1.1 */
-            CO_API int getSize();
+            CO_API int getSize() const;
 
-            CO_API static MPI * instance();
+            /** @return the instance of MPI class. */
+            CO_API static const MPI * instance(int argc = 0, char ** argv = 0);
 
         private:
+            MPI( int argc, char ** argv );
+
+            ~MPI();
+
             int  _rank;
             int  _size;
             bool _supportedThreads;
             bool _init;
+
+            static MPI * _instance;
     };
 
 }

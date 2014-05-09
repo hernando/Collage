@@ -25,17 +25,7 @@
 namespace co
 {
 
-namespace
-{
-
-static MPI _mpi;
-
-MPI * _getInstance()
-{
-    return &_mpi;
-}
-
-}
+MPI * MPI::_instance = 0;
 
 MPI::MPI()
     : _rank( -1 )
@@ -45,18 +35,12 @@ MPI::MPI()
 {
 }
 
-MPI::~MPI()
+MPI::MPI( int argc, char ** argv )
+    : _rank( -1 )
+    , _size( -1 )
+    , _supportedThreads( false )
+    , _init( false )
 {
-    if( MPI_SUCCESS != MPI_Finalize() )
-    {
-        LBERROR << "Error at finalizing MPI library" << std::endl;
-    }
-}
-
-bool MPI::init(int argc, char ** argv)
-{
-    LBASSERT( !_init );
-
 	int threadSupportProvided = -1;
 	if( MPI_SUCCESS != MPI_Init_thread( (int*) &argc, &argv,
                                             MPI_THREAD_MULTIPLE,
@@ -65,8 +49,10 @@ bool MPI::init(int argc, char ** argv)
         _init = true;
         _supportedThreads = false;
         LBERROR << "Error at initialization MPI library" << std::endl;
-        return false;
+        return;
     }
+
+    _init = true;
 
 	switch( threadSupportProvided )
     {
@@ -102,35 +88,45 @@ bool MPI::init(int argc, char ** argv)
         LBWARN << "Error determining the size of the group\
                     associated with a communicator." << std::endl;
         _supportedThreads = false;
-        return false;
     }
-
-    _init = true;
-
-    return true;
 }
 
-bool MPI::supportsThreads()
+MPI::~MPI()
+{
+    if( _init )
+        if( MPI_SUCCESS != MPI_Finalize() )
+        {
+            LBERROR << "Error at finalizing MPI library" << std::endl;
+        }
+}
+
+bool MPI::supportsThreads() const
 {
     LBASSERT( _init );
     return _supportedThreads;
 }
 
-int MPI::getRank()
+int MPI::getRank() const
 {
     LBASSERT( _supportedThreads );
     return _rank;
 }
 
-int MPI::getSize()
+int MPI::getSize() const
 {
     LBASSERT( _supportedThreads );
     return _size;
 }
 
-MPI * MPI::instance()
+const MPI * MPI::instance(int argc, char ** argv)
 {
-    return _getInstance();
+    if( !_instance )
+    {
+        static MPI instance = MPI( argc, argv );
+        _instance = &instance; 
+    }
+
+    return _instance;
 }
 
 }
