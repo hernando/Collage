@@ -168,6 +168,7 @@ if(UDT_FOUND)
 endif()
 
 if(MPI_FOUND)
+  list(APPEND COLLAGE_PUBLIC_HEADERS mpi.h )
   list(APPEND COLLAGE_HEADERS mpi.h mpiConnection.h)
   list(APPEND COLLAGE_SOURCES mpi.cpp mpiConnection.cpp)
 endif()

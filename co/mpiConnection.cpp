@@ -729,10 +729,10 @@ ConnectionPtr MPIConnection::acceptSync()
     newConn->startDispatcher();
 
     newConn->_setState( STATE_CONNECTED );
-/*
-    LBINFO << "Accepted to rank " << newImpl->peerRank << " on tag "
-           << newImpl->tagRecv << std::endl;
-*/
+
+    LBINFO << "Accepted to rank " << newConn->getPeerRank() << " on tag "
+           << newConn->getTagRecv() << std::endl;
+
     _event->reset();
 
     return newConn;
