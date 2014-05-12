@@ -23,7 +23,7 @@
 #include <co/connectionSet.h>
 #include <co/init.h>
 #ifdef COLLAGE_USE_MPI
-#  include <co/mpi.h>
+#  include <lunchbox/mpi.h>
 #endif
 
 #include <lunchbox/clock.h>
@@ -75,7 +75,7 @@ void runMPITest()
     desc->port = 1234;
     desc->setHostname( "127.0.0.1" );
 
-    if( co::MPI::instance()->getRank() == 0 )
+    if( lunchbox::MPI::instance()->getRank() == 0 )
     {
         co::ConnectionPtr listener = co::Connection::create( desc );
         TEST( listener );
@@ -154,10 +154,10 @@ int main( int argc, char **argv )
     /* Check if started with mpirun and size of MPI_COMM_WORLD
      * is equal to 2.
      */
-    if( co::MPI::instance()->supportsThreads() &&
-        co::MPI::instance()->getSize() > 1 )
+    if( lunchbox::MPI::instance()->supportsThreads() &&
+        lunchbox::MPI::instance()->getSize() > 1 )
     {
-        if( co::MPI::instance()->getSize() == 2 )
+        if( lunchbox::MPI::instance()->getSize() == 2 )
             runMPITest();
         co::exit();
         return EXIT_SUCCESS;

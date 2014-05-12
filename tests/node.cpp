@@ -25,7 +25,7 @@
 #include <co/node.h>
 #include <co/oCommand.h>
 #ifdef COLLAGE_USE_MPI
-#  include <co/mpi.h>
+#  include <lunchbox/mpi.h>
 #endif
 
 #include <lunchbox/clock.h>
@@ -43,7 +43,9 @@ static const std::string message =
     "Don't Panic! And now some more text to make the message bigger";
 
 #ifdef COLLAGE_USE_MPI
-#define NMESSAGES (unsigned) co::MPI::instance()->getSize() * 1000
+#define NMESSAGES (unsigned) ( lunchbox::MPI::instance()->supportsThreads()   \
+                                ? lunchbox::MPI::instance()->getSize() * 1000 \
+                                : 1000)
 #else
 #define NMESSAGES 1000
 #endif
@@ -92,7 +94,7 @@ void runMPITest()
     lunchbox::RNG rng;
     const uint16_t port = 1024;
 
-    if( co::MPI::instance()->getRank() == 0 )
+    if( lunchbox::MPI::instance()->getRank() == 0 )
     {
         lunchbox::RefPtr< Server > server;
         server = new Server( );
@@ -124,7 +126,7 @@ void runMPITest()
         co::LocalNodePtr client = new co::LocalNode;
         connDesc = new co::ConnectionDescription;
         connDesc->type = co::CONNECTIONTYPE_MPI;
-        connDesc->rank = co::MPI::instance()->getRank();
+        connDesc->rank = lunchbox::MPI::instance()->getRank();
 
         client->addConnectionDescription( connDesc );
         TEST( client->listen( ));
@@ -161,10 +163,10 @@ int main( int argc, char **argv )
     /* Check if started with mpirun and size of MPI_COMM_WORLD
      * is equal to 2.
      */
-    if( co::MPI::instance()->supportsThreads() &&
-        co::MPI::instance()->getSize() > 1 )
+    if( lunchbox::MPI::instance()->supportsThreads() &&
+        lunchbox::MPI::instance()->getSize() > 1 )
     {
-        if( co::MPI::instance()->getSize() == 2 )
+        if( lunchbox::MPI::instance()->getSize() == 2 )
             runMPITest();
         co::exit();
         return EXIT_SUCCESS;

@@ -20,7 +20,7 @@
 #include <lunchbox/clock.h>
 #include <lunchbox/rng.h>
 #ifdef COLLAGE_USE_MPI
-#  include <co/mpi.h>
+#  include <lunchbox/mpi.h>
 #endif
 
 #define NCOMMANDS 10000
@@ -94,7 +94,7 @@ typedef lunchbox::RefPtr< LocalNode > LocalNodePtr;
 #ifdef COLLAGE_USE_MPI
 void runMPITest()
 {
-    if( co::MPI::instance()->getRank() == 0 )
+    if( lunchbox::MPI::instance()->getRank() == 0 )
     {
         co::ConnectionDescriptionPtr connDesc = new co::ConnectionDescription;
         connDesc->type = co::CONNECTIONTYPE_MPI;
@@ -196,10 +196,10 @@ int main( int argc, char **argv )
     /* Check if started with mpirun and size of MPI_COMM_WORLD
      * is greater than 1.
      */
-    if( co::MPI::instance()->supportsThreads() &&
-        co::MPI::instance()->getSize() > 1 )
+    if( lunchbox::MPI::instance()->supportsThreads() &&
+        lunchbox::MPI::instance()->getSize() > 1 )
     {
-        if( co::MPI::instance()->getSize() == 2 )
+        if( lunchbox::MPI::instance()->getSize() == 2 )
             runMPITest();
         co::exit();
         return EXIT_SUCCESS;

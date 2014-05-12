@@ -28,8 +28,6 @@
 #include <lunchbox/mtQueue.h>
 #include <lunchbox/thread.h>
 
-#include <mpi.h>
-
 #include <map>
 
 namespace co

@@ -26,6 +26,8 @@
 
 #include <set>
 
+#include<lunchbox/mpi.h>
+
 namespace
 {
 
@@ -521,12 +523,7 @@ MPIConnection::MPIConnection()
         , _event( new EventConnection )
 {
     // Ask rank of the process
-    if( MPI_SUCCESS != MPI_Comm_rank( MPI_COMM_WORLD, &_rank ) )
-    {
-        LBERROR << "Could not determine the rank of the calling "
-                << "process in the communicator: MPI_COMM_WORLD."
-                << std::endl;
-    }
+    _rank = lunchbox::MPI::instance()->getRank();
 
     LBASSERT( _rank >= 0 );
     ConnectionDescriptionPtr description = _getDescription( );
