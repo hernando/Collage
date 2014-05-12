@@ -22,9 +22,6 @@
 #include "global.h"
 #include "node.h"
 #include "socketConnection.h"
-#ifdef COLLAGE_USE_MPI
-#  include "mpi.h"
-#endif
 
 #include <lunchbox/init.h>
 #include <lunchbox/os.h>
