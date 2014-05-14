@@ -27,6 +27,7 @@
 #include <lunchbox/scopedMutex.h>
 #include <lunchbox/mtQueue.h>
 #include <lunchbox/thread.h>
+#include<lunchbox/mpi.h>
 
 #include <map>
 

@@ -26,6 +26,7 @@
 #include <co/oCommand.h>
 #ifdef COLLAGE_USE_MPI
 #  include <lunchbox/mpi.h>
+#  include <mpi.h>
 #endif
 
 #include <lunchbox/clock.h>
@@ -42,20 +43,14 @@ lunchbox::Monitor<bool> monitor( false );
 static const std::string message =
     "Don't Panic! And now some more text to make the message bigger";
 
-#ifdef COLLAGE_USE_MPI
-#define NMESSAGES (unsigned) ( lunchbox::MPI::instance()->supportsThreads()   \
-                                ? lunchbox::MPI::instance()->getSize() * 1000 \
-                                : 1000)
-#else
 #define NMESSAGES 1000
-#endif
 }
 
 
 class Server : public co::LocalNode
 {
 public:
-    Server() : _messagesLeft( NMESSAGES ){}
+    Server( unsigned nMessages ) : _messagesLeft( nMessages ){}
 
     virtual bool listen()
         {
@@ -94,10 +89,11 @@ void runMPITest()
     lunchbox::RNG rng;
     const uint16_t port = 1024;
 
-    if( lunchbox::MPI::instance()->getRank() == 0 )
+    lunchbox::MPI mpi;
+    if( mpi.getRank() == 0 )
     {
         lunchbox::RefPtr< Server > server;
-        server = new Server( );
+        server = new Server( NMESSAGES * mpi.getSize() );
         co::ConnectionDescriptionPtr connDesc = new co::ConnectionDescription;
         connDesc->type = co::CONNECTIONTYPE_MPI;
         connDesc->port = port;
@@ -126,7 +122,7 @@ void runMPITest()
         co::LocalNodePtr client = new co::LocalNode;
         connDesc = new co::ConnectionDescription;
         connDesc->type = co::CONNECTIONTYPE_MPI;
-        connDesc->rank = lunchbox::MPI::instance()->getRank();
+        connDesc->rank = mpi.getRank();
 
         client->addConnectionDescription( connDesc );
         TEST( client->listen( ));
@@ -163,11 +159,10 @@ int main( int argc, char **argv )
     /* Check if started with mpirun and size of MPI_COMM_WORLD
      * is equal to 2.
      */
-    if( lunchbox::MPI::instance()->supportsThreads() &&
-        lunchbox::MPI::instance()->getSize() > 1 )
+    lunchbox::MPI mpi( argc, argv );
+    if( mpi.supportsThreads() && mpi.getSize() > 1 )
     {
-        if( lunchbox::MPI::instance()->getSize() == 2 )
-            runMPITest();
+        runMPITest();
         co::exit();
         return EXIT_SUCCESS;
     }
@@ -176,7 +171,7 @@ int main( int argc, char **argv )
     lunchbox::RNG rng;
     const uint16_t port = (rng.get<uint16_t>() % 60000) + 1024;
 
-    lunchbox::RefPtr< Server > server = new Server;
+    lunchbox::RefPtr< Server > server = new Server( NMESSAGES );
     co::ConnectionDescriptionPtr connDesc = new co::ConnectionDescription;
 
     connDesc->type = co::CONNECTIONTYPE_TCPIP;

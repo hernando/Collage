@@ -75,7 +75,8 @@ void runMPITest()
     desc->port = 1234;
     desc->setHostname( "127.0.0.1" );
 
-    if( lunchbox::MPI::instance()->getRank() == 0 )
+    lunchbox::MPI mpi;
+    if( mpi.getRank() == 0 )
     {
         co::ConnectionPtr listener = co::Connection::create( desc );
         TEST( listener );
@@ -154,10 +155,11 @@ int main( int argc, char **argv )
     /* Check if started with mpirun and size of MPI_COMM_WORLD
      * is equal to 2.
      */
-    if( lunchbox::MPI::instance()->supportsThreads() &&
-        lunchbox::MPI::instance()->getSize() > 1 )
+    lunchbox::MPI mpi( argc, argv );
+    if( mpi.supportsThreads() &&
+        mpi.getSize() > 1 )
     {
-        if( lunchbox::MPI::instance()->getSize() == 2 )
+        if( mpi.getSize() == 2 )
             runMPITest();
         co::exit();
         return EXIT_SUCCESS;

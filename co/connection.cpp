@@ -41,7 +41,6 @@
 #  include "udtConnection.h"
 #endif
 #ifdef COLLAGE_USE_MPI
-#   include <lunchbox/mpi.h>
 #   include "mpiConnection.h"
 #endif
 
@@ -183,8 +182,12 @@ ConnectionPtr Connection::create( ConnectionDescriptionPtr description )
              * MPI library, if not the MPI connection is disabled to avoid
              * future errors.  TODO: fix it.
              */
-            if( !lunchbox::MPI::instance()->supportsThreads() )
-                return 0;
+            // Braces, crosses initialization of ‘lunchbox::MPI mpi’
+            {
+                lunchbox::MPI mpi;
+                if( !mpi.supportsThreads() )
+                    return 0;
+            }
 
             connection = new MPIConnection;
             break;

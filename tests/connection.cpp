@@ -29,6 +29,7 @@
 
 #ifdef COLLAGE_USE_MPI
 #  include <lunchbox/mpi.h>
+#  include <mpi.h>
 #endif
 
 
@@ -99,8 +100,9 @@ void runMPITest()
         desc->setHostname( "127.0.0.1" );
 
         lunchbox::Clock clock;
+        lunchbox::MPI mpi;
 
-        if( lunchbox::MPI::instance()->getRank() == 0 )
+        if( mpi.getRank() == 0 )
         {
             co::ConnectionPtr listener = co::Connection::create( desc );
             if( !listener )
@@ -143,7 +145,7 @@ void runMPITest()
             if( reader.isValid( ))
                 TEST( reader->getRefCount() == 1 );
         }
-        else if( lunchbox::MPI::instance()->getRank() == 1 )
+        else
         {
             MPI_Barrier( MPI_COMM_WORLD );
 
@@ -161,13 +163,11 @@ void runMPITest()
 
             TEST( writer->getRefCount() == 1 );
         }
-        else
-            return;
 
         const float time = clock.getTimef();
 
         std::cout << desc->type << " rank "
-                  << lunchbox::MPI::instance()->getRank() << ": "
+                  << mpi.getRank() << ": "
                   << NPACKETS * PACKETSIZE / 1024.f / 1024.f * 1000.f / time
                   << " MB/s" << std::endl;
     }
@@ -184,11 +184,10 @@ int main( int argc, char **argv )
     /* Check if started with mpirun and size of MPI_COMM_WORLD
      * is equal to 2.
      */
-    if( lunchbox::MPI::instance()->supportsThreads() &&
-        lunchbox::MPI::instance()->getSize() > 1 )
+    lunchbox::MPI mpi( argc, argv );
+    if( mpi.supportsThreads() && mpi.getSize() == 2 )
     {
-        if( lunchbox::MPI::instance()->getSize() == 2 )
-            runMPITest();
+        runMPITest();
         co::exit();
         return EXIT_SUCCESS;
     }

@@ -25,8 +25,7 @@
 #include <boost/thread/thread.hpp>
 
 #include <set>
-
-#include<lunchbox/mpi.h>
+#include <mpi.h>
 
 namespace
 {
@@ -523,7 +522,8 @@ MPIConnection::MPIConnection()
         , _event( new EventConnection )
 {
     // Ask rank of the process
-    _rank = lunchbox::MPI::instance()->getRank();
+    lunchbox::MPI mpi;
+    _rank = mpi.getRank();
 
     LBASSERT( _rank >= 0 );
     ConnectionDescriptionPtr description = _getDescription( );

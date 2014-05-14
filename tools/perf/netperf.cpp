@@ -314,7 +314,8 @@ void runMPI( bool useThreads, size_t packetSize,
     description->rank = 0;
     description->setHostname( "localhost" );
 
-    const bool isClient =  lunchbox::MPI::instance()->getRank() != 0;
+    lunchbox::MPI mpi;
+    const bool isClient =  mpi.getRank() != 0;
     // run
     co::ConnectionPtr connection = co::Connection::create( description );
     if( !connection )
@@ -466,11 +467,11 @@ int main( int argc, char **argv )
     
 
     #ifdef COLLAGE_USE_MPI
+    lunchbox::MPI mpi( argc, argv );
     /* Check if started with mpirun and size of MPI_COMM_WORLD
      * is equal to 2.
      */
-    if( lunchbox::MPI::instance()->supportsThreads() &&
-        lunchbox::MPI::instance()->getSize() > 1 )
+    if( mpi.supportsThreads() && mpi.getSize() > 1 )
     {
         runMPI( useThreads, packetSize, nPackets, waitTime);
         co::exit();
