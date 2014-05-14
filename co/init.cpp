@@ -26,6 +26,9 @@
 #include <lunchbox/init.h>
 #include <lunchbox/os.h>
 #include <lunchbox/pluginRegistry.h>
+#ifdef COLLAGE_USE_MPI
+#  include <lunchbox/mpi.h>
+#endif
 
 namespace co
 {
@@ -51,6 +54,10 @@ bool _init( const int argc, char** argv )
 
     if( !lunchbox::init( argc, argv ))
         return false;
+
+    #ifdef COLLAGE_USE_MPI
+    static lunchbox::MPI mpi( (int&)argc, argv );
+    #endif
 
     // init all available plugins
     lunchbox::PluginRegistry& plugins = Global::getPluginRegistry();
