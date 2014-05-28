@@ -360,26 +360,56 @@ bool MPIConnection::Dispatcher::close()
      */
 
     _dispatcherQ.push( Petition{ -1, 0 } );
+    MPI_Request toSource;
+    MPI_Request toOneself;
 
     unsigned char eof = 0xFF;
-    if( MPI_SUCCESS != MPI_Send( &eof, 1,
+    if( MPI_SUCCESS != MPI_Isend( &eof, 1,
                                     MPI_BYTE,
                                     _rank,
                                     _tag,
-                                    MPI_COMM_WORLD ) )
+                                    MPI_COMM_WORLD,
+                                    &toOneself ) )
     {
-        LBWARN << "Error sending eof to remote " << std::endl;
+        LBWARN << "Error sending eof to local " << std::endl;
     }
-    if( MPI_SUCCESS != MPI_Send( &eof, 1,
+    if( MPI_SUCCESS != MPI_Isend( &eof, 1,
                                     MPI_BYTE,
                                     _source,
                                     _tagClose,
-                                    MPI_COMM_WORLD ) )
+                                    MPI_COMM_WORLD,
+                                    &toSource ) )
     {
         LBWARN << "Error sending eof to remote " << std::endl;
     }
 
     join();
+
+    /** Cancel requests whether Send has not finished */
+    int endSource = -1;
+    if( MPI_SUCCESS != MPI_Test( &toSource, &endSource, MPI_STATUS_IGNORE ) )
+    {
+        LBWARN << "Error sending eof to local " << std::endl;
+        return false;
+    }
+    if( !endSource )
+        if( MPI_SUCCESS != MPI_Cancel( &toSource ) )
+        {
+            LBWARN << "Error sending eof to local " << std::endl;
+            return false;
+        }
+    int endOneself = -1;
+    if( MPI_SUCCESS != MPI_Test( &toOneself, &endOneself, MPI_STATUS_IGNORE ) )
+    {
+        LBWARN << "Error sending eof to remote " << std::endl;
+        return false;
+    }
+    if( !endOneself )
+        MPI_Cancel( &toOneself );
+        {
+            LBWARN << "Error sending eof to remote " << std::endl;
+            return false;
+        }
 
     /** If someone is waitting signal. */
     _notifier->set();
@@ -402,8 +432,8 @@ void MPIConnection::AsyncConnection::abort()
 {
     /** Send a no rank to wake the thread up. */
     int rank = -1;
-    if( MPI_SUCCESS != MPI_Ssend( &rank, 4,
-                                    MPI_BYTE,
+    if( MPI_SUCCESS != MPI_Ssend( &rank, 1,
+                                    MPI_INT,
                                     _detail->getRank(),
                                     _tag,
                                     MPI_COMM_WORLD ) )
@@ -495,7 +525,7 @@ void MPIConnection::AsyncConnection::run()
                                     peerRank,
                                     _tag,
                                     MPI_COMM_WORLD,
-                                    NULL ) )
+                                    MPI_STATUS_IGNORE ) )
     {
         LBWARN << "Could not receive MPI tag from "
                << peerRank << " process." << std::endl;
@@ -593,7 +623,8 @@ bool MPIConnection::connect()
                                     MPI_BYTE,
                                     _peerRank,
                                     cTag,
-                                    MPI_COMM_WORLD, NULL ) )
+                                    MPI_COMM_WORLD,
+                                    MPI_STATUS_IGNORE ) )
     {
         LBWARN << "Could not receive MPI tag from "
                << _peerRank << " process." << std::endl;
