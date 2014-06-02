@@ -40,6 +40,10 @@ if(LUNCHBOX_USE_OPENMP)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
+if(MPI_FOUND)
+  add_definitions(-DMPICH_SKIP_MPICXX)
+endif()
+
 if(NOT MSVC)
   set(PTHREAD_LIBRARIES pthread)
 endif()
