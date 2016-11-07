@@ -46,6 +46,15 @@ Buffer::Buffer(BufferListener* listener)
 {
 }
 
+Buffer::Buffer(const std::function<AllocateFunc>& alloc,
+               const std::function<DeallocateFunc>& dealloc,
+               BufferListener* listener)
+    : lunchbox::Bufferb(alloc, dealloc)
+    , lunchbox::Referenced()
+    , _impl(new detail::Buffer(listener))
+{
+}
+
 Buffer::~Buffer()
 {
     delete _impl;

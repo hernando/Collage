@@ -49,6 +49,11 @@ public:
     /** Construct a new buffer. @version 1.0 */
     CO_API explicit Buffer(BufferListener* listener = 0);
 
+    /** Construct a new buffer. @version 1.6 */
+    CO_API Buffer(const std::function<AllocateFunc>& alloc,
+                  const std::function<DeallocateFunc>& dealloc,
+                  BufferListener* listener = 0);
+
     /** Destruct this buffer. @version 1.0 */
     CO_API virtual ~Buffer();
 

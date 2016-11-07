@@ -4,6 +4,8 @@
 
 * [214](https://github.com/Eyescale/Collage/pull/214)
   Removed support for boost::serialization
+* [202](https://github.com/Eyescale/Collage/pull/202)
+  New Buffer constructor that takes custom alloc/dealloc functors.
 
 # Release 1.7 (24-May-2017)
 
@@ -24,7 +26,6 @@
   of behaviour in librdmacm.
 * [186](https://github.com/Eyescale/Collage/pull/186)
   Obsolete SDP connection removed.
-
 * [192](https://github.com/Eyescale/Collage/pull/192):
   Add remote node launch API and implementation
 
